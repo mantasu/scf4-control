@@ -1,0 +1,3 @@
+<launch>
+    <node name="c1prox18" pkg="scf4_control" type="c1prox18_node.py" output="screen"/>
+</launch>
