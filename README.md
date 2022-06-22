@@ -1,4 +1,4 @@
-# ROS Controll Package for SCF4-M Module
+# ROS Control Package for SCF4-M Module
 ## Overview
 
 This package provides publisher-subscriber scripts for [**SCF4-M**](https://wiki.kurokesu.com/books/scf4) motor controller (targeted at [**C1 PRO**](https://wiki.kurokesu.com/books/c1-pro-x18) camera) for control interaction via [ROS](https://www.ros.org/) messages. The camera has `2` stepper motors [_focus_ | _zoom_] to drive the **FIZ+** lens.
