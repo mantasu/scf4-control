@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 import rospy
+import argparse
 from src.c1prox18_camera import C1ProX18
+
+DEFAULT_CONFIG_PATH = "config.json"
 
 def run_c1prox18(freq=10):
     # Publisher rate and camera

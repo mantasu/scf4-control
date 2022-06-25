@@ -2,7 +2,7 @@ import rospy
 from geometry_msgs.msg import Twist
 from scf4_control.msg import Scf4
 from serial_handler import SerialHandler
-from utils import parse_json
+from utils import parse_json, adc_to_volt
 
 
 class C1ProX18:
@@ -14,6 +14,13 @@ class C1ProX18:
         config = parse_json(config_path)
         self.serial_handler = SerialHandler(config)
 
+        # Connect to the SCF4 module
+        self.serial_handler.connect()
+
+        # Log the information version and the voltage of the SCF4 module 
+        rospy.loginfo("\n".join(self.serial_handler.get_version().split(', ')))
+        rospy.loginfo(f"AC: {adc_to_volt(self.serial_handler.get_voltage())}V")
+
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
@@ -23,10 +30,18 @@ class C1ProX18:
             "/scf4", Scf4, self.scf4_callback, queue_size=10)
 
         # For image data check http://wiki.ros.org/Sensors/Cameras
-        pass
     
     def _vel_callback_helper(self, twist, motor_type):
-        """_summary_
+        """A helper function to generate motor velocity values
+
+        Takes a twist object and compares it with the last twist object.
+        Any absolute value changes indicate motor speed changes and a
+        corresponding speed value is created based on motor's 
+        `vel_factor` attribute. The property `jog_steps` define the
+        number of steps to move and it is simply multiplied by the sign
+        of the twist velocity component that corresponds to a specified
+        motor. For linear (motor A), only the `x` component is
+        considered, for angular (motor B) - only the `z`*.
 
         *For speed changes, it is also possible to compute overall
         magnitude and direction of a 3D vector (for both linear and
@@ -45,7 +60,8 @@ class C1ProX18:
             motor_type (str): The type of motor - A (zoom) or B (focus)
 
         Returns:
-            tuple(int, float): _description_
+            tuple(int, int): A tuple of speed and steps values for the
+                specified motor. They can be `None`.
         """
         # Init Nones
         speed = None
@@ -77,7 +93,15 @@ class C1ProX18:
         return speed, steps
 
     def vel_callback(self, twist):
-        """_summary_
+        """Coverts twist object to a G-code command and send it
+
+        The twist object's linear velocity (component x) accounts for
+        motor A (zoom) movement and angular velocity (component z) for
+        motor B (focus) movement. Each component can be positive or
+        negative indicating motor movement direction. If there are any
+        changes in the absolute values, motor speed changes occur
+        accordingly. See :func:`~C1ProX18._vel_callback_helper` for
+        more details.
 
         Args:
             twist (Twist): The twist message from /cmd_vel topic
@@ -123,6 +147,3 @@ class C1ProX18:
 
     def publish(self):
         pass
-
-    def connect(self):
-        self.serial_handler.connect(self.port, self.baudrate, self.timeout)

@@ -148,9 +148,6 @@ class SerialHandler():
         self.send_command("M235 A120 B120 C120")
         self.send_command("M232 A400 B400 C400 E700 F700 G700")
 
-        # Inform the SCF4 controller has been initialized
-        rospy.loginfo("The controller has been initialized")
-
     def connect(self, port=None, baudrate=None, timeout=None):
         """Initializes connection via serial port to SCF4
 
@@ -180,10 +177,16 @@ class SerialHandler():
         # Initialize the serial object by specifying its parameters
         self.serial = serial.Serial(port, baudrate, timeout=timeout)
 
+        # Inform buffers are being prepared
+        rospy.loginfo("Preparing buffers...")
+
         # Prepare buffers
         self.serial.open()
         self.serial.reset_input_buffer()
         self.serial.reset_output_buffer()
+
+        # Inform the controller is being initialized
+        rospy.loginfo("Initializing the controller...")
 
         # Initialize controller
         self._init_controller()
