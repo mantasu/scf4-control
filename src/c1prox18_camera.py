@@ -1,62 +1,29 @@
 import rospy
 from geometry_msgs.msg import Twist
+from scf4_control.msg import Scf4
 from serial_handler import SerialHandler
+from utils import parse_json
+
 
 class C1ProX18:
-    def __init__(self):
+    def __init__(self, config_path="config.json"):
+        # Last msgs to check changes
+        self.twist_last = Twist()
+
+        # Parse config file and init SH
+        config = parse_json(config_path)
+        self.serial_handler = SerialHandler(config)
+
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
         
         # Subscriber for attribute changes for motor control
-        # self.scf4_subscriber = rospy.Subscriber(
-        #     "/scf4", Scf4, self.scf4_callback, queue_size=10)
-        
-        self.twist_last = Twist()
-        self.serial_handler = SerialHandler()
-
-        # TODO: move to settings.json
-        self.port = ""
-        self.baudrate = 115200
-        self.timeout = -1
-
-        self.motor_a = {
-            "jog_steps": 50,
-            "speed_min": 400,
-            "speed_max": 4000,
-            "vel_factor": 1000,
-        }
-
-        self.motor_b = {
-            "jog_steps": 25,
-            "speed_min": 400,
-            "speed_max": 4000,
-            "vel_factor": 1000,
-        }
-
+        self.scf4_subscriber = rospy.Subscriber(
+            "/scf4", Scf4, self.scf4_callback, queue_size=10)
 
         # For image data check http://wiki.ros.org/Sensors/Cameras
         pass
-
-    def _clamp(self, speed_new, motor_type):
-        """Clamps the motor speed
-
-        This method takes a speed value and a motor type, and clamps the
-        speed between the min and max range depending on the motor type.
-        It also converts the speed to an integer value.
-
-        Args:
-            speed_new (float): The speed value to clamp
-            motor_type (str): The type of motor the speed depends on
-
-        Returns:
-            int: The clamped speed value converted to an integer
-        """
-        # Grabs the correct motor and clamps the speed within range
-        motor = self.motor_a if motor_type == "A" else self.motor_b
-        clamped = max(motor["speed_min"], min(motor["speed_max"], speed_new))
-
-        return int(clamped)
     
     def _vel_callback_helper(self, twist, motor_type):
         """_summary_
@@ -78,7 +45,7 @@ class C1ProX18:
             motor_type (str): The type of motor - A (zoom) or B (focus)
 
         Returns:
-            tuple(int|None, float|None): _description_
+            tuple(int, float): _description_
         """
         # Init Nones
         speed = None
@@ -120,12 +87,39 @@ class C1ProX18:
         speed_b, steps_b = self._vel_callback_helper(twist, "B")
 
         # Send the values to the controller to execute cmd
-        self.serial_handler.change_speed(speed_a, speed_b)
-        self.serial_handler.move_motors(steps_a, steps_b)
+        self.serial_handler.set_speed(speed_a, speed_b)
+        self.serial_handler.move(steps_a, steps_b)
 
         # Set last twist value
         self.twist_last = twist
+    
+    def scf4_callback(self, scf4):
+        if scf4.stop:
+            self.serial_handler.stop()
         
+        if scf4.filter_position >= 0:
+            self.serial_handler.set_filter_position(scf4.filter_position)
+        
+        if scf4.coordinate_mode >= 0:
+            self.serial_handler.set_coordinate_mode(scf4.coordinate_mode)
+        
+        if scf4.motor_move_mode >= 0:
+            self.serial_handler.set_motor_move_mode(scf4.motor_move_mode)
+        
+        if len(scf4.steps) > 0:
+            self.serial_handler.move(*scf4.steps)
+        
+        if len(scf4.speed) > 0:
+            self.serial_handler.set_speed(*scf4.speed)
+
+        if len(scf4.count) > 0:
+            self.serial_handler.set_counter(*scf4.count)
+
+        if scf4.command != "":
+            self.serial_handler.send_command(scf4.command)
+        
+        if scf4.wait > 0:
+            self.serial_handler.wait(scf4.wait)
 
     def publish(self):
         pass

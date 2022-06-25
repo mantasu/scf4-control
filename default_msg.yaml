@@ -1,0 +1,9 @@
+stop: false
+filter_position: -1
+coordinate_mode: -1
+motor_move_mode: -1
+wait: 0
+steps: [0, 0, 0]
+speed: [-1, -1, -1]
+count: [-1, -1, -1]
+command: ""

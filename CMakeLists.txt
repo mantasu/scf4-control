@@ -8,7 +8,9 @@ project(scf4_control)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  message_generation  
   geometry_msgs
+  std_msgs
   rospy
 )
 
@@ -46,11 +48,10 @@ catkin_python_setup()
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  Scf4.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -67,10 +68,10 @@ catkin_python_setup()
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   std_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  geometry_msgs std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -104,7 +105,7 @@ catkin_python_setup()
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES scf4_control
-#  CATKIN_DEPENDS geometry_msgs rospy std_msgs
+  CATKIN_DEPENDS message_runtime geometry_msgs rospy std_msgs
 #  DEPENDS system_lib
 )
 

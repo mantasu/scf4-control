@@ -1,3 +1,4 @@
+import json
 from geometry_msgs.msg import Vector3
 
 def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
@@ -25,3 +26,21 @@ def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
     v_in = (adc / resolution) * (v_ref / scale)
 
     return v_in
+
+def parse_json(path):
+    """Reads a json file and converts to python dictionary
+
+    Simply takes the location of a json file, opens it in read mode and
+    extracts its contents to a python dictionary.
+
+    Args:
+        path (str): The path to the json file
+
+    Returns:
+        dict: A parsed json dictionary
+    """
+    with open(path, 'r') as f:
+        # Parse to python dict
+        data = json.load(f)
+    
+    return data
