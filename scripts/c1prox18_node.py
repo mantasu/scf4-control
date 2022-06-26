@@ -2,7 +2,7 @@
 
 import rospy
 import argparse
-from src.c1prox18_camera import C1ProX18
+from scf4_control.c1prox18_camera import C1ProX18
 
 DEFAULT_CONFIG_PATH = "config.json"
 

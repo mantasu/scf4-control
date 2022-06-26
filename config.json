@@ -1,5 +1,5 @@
 {
-    "port": "USB0",
+    "port": "/dev/ttyACM0",
     "baudrate": 115200,
     "timeout": 5,
     "A": {

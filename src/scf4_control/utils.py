@@ -1,5 +1,6 @@
+import os
 import json
-from geometry_msgs.msg import Vector3
+import rospkg
 
 def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
     """Converts ADC value to voltage
@@ -27,7 +28,7 @@ def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
 
     return v_in
 
-def parse_json(path):
+def parse_json(path, is_in_package=True):
     """Reads a json file and converts to python dictionary
 
     Simply takes the location of a json file, opens it in read mode and
@@ -35,10 +36,15 @@ def parse_json(path):
 
     Args:
         path (str): The path to the json file
+        is_in_package (bool): Whether the relative path is in package
 
     Returns:
         dict: A parsed json dictionary
     """
+    if is_in_package:
+        rel_path = rospkg.RosPack().get_path("scf4_control")
+        path = os.path.join(rel_path, path)
+
     with open(path, 'r') as f:
         # Parse to python dict
         data = json.load(f)
