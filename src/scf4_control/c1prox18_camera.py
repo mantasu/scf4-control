@@ -4,11 +4,10 @@ from scf4_control.msg import Scf4
 from scf4_control.serial_handler import SerialHandler
 from scf4_control.utils import parse_json, adc_to_volt
 
-
 class C1ProX18:
     def __init__(self, config_path="config.json"):
-        # Last msgs to check changes
-        self.twist_last = Twist()
+        # Last speed vals to check changes
+        self.speed_last = {"A": 0, "B": 0}
 
         # Parse config file and init SH
         config = parse_json(config_path)
@@ -17,9 +16,13 @@ class C1ProX18:
         # Connect to the SCF4 module
         self.serial_handler.connect()
 
-        # Log the information version and the voltage of the SCF4 module 
-        rospy.loginfo("\n".join(self.serial_handler.get_version().split(', ')))
-        rospy.loginfo(f"AC: {adc_to_volt(self.serial_handler.get_voltage())}V")
+        # Assign the firmware version and the serial voltage params 
+        self.version = self.serial_handler.get_version().split(', ')
+        self.voltage = adc_to_volt(self.serial_handler.get_voltage())
+
+        # Log information about version and voltage of the SCF4 module
+        rospy.loginfo("Version:\n\t* " + "\n\t* ".join(self.version))
+        rospy.loginfo("Voltage: " + (f"{self.voltage}" if self.voltage else "N/A"))
 
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
@@ -70,26 +73,22 @@ class C1ProX18:
         # Select the configuration for the right motor 
         motor = self.serial_handler.config[motor_type]
 
-        if motor_type == "A":
-            # If the motor type is A
-            vel_curr = twist.linear.x
-            vel_last = self.twist_last.linear.x
-        else:
-            # If the motor type is B
-            vel_curr = twist.angular.z
-            vel_last = self.twist_last.angular.z
+        # Get last and current speed values 
+        vel_last = self.speed_last[motor_type]
+        vel_curr = twist.linear.x if motor_type == "A" else twist.angular.z
 
         if vel_curr != 0:
             # Check the direction and make motor steps either + or -
             steps = motor["jog_steps"] * (1 if vel_curr > 0 else -1)
 
             if not abs(vel_curr) == abs(vel_last):
-                # If speed is different from the last
-                speed = vel_curr * motor["vel_factor"]
+                # If current speed is different from the last
+                speed = abs(vel_curr) * motor["vel_factor"]
+                self.speed_last[motor_type] = abs(vel_curr)
                 
                 # Inform about the speed change for a specific motor
                 rospy.loginfo(f"Motor {motor_type} speed changed to {speed}")
-        
+
         return speed, steps
 
     def vel_callback(self, twist):

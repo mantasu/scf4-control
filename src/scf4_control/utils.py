@@ -20,10 +20,16 @@ def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
             given it comes in the format "ADC={val}". Defaults to True.
 
     Returns:
-        float: The voltage the SCF4 module receives
+        float: The voltage the SCF4 module receives. Might be `None` if
+            the provided `adc` is an empty string
     """
-    # Parse if needed and compute voltage
-    adc = float(adc[4:]) if parse else adc
+    if isinstance(adc, str):
+        # Convert to proper type
+        if adc == "": return None
+        if parse: adc = adc[4:]
+        adc = float(adc)
+    
+    # Compute voltage given the ADC voltage
     v_in = (adc / resolution) * (v_ref / scale)
 
     return v_in
@@ -42,6 +48,7 @@ def parse_json(path, is_in_package=True):
         dict: A parsed json dictionary
     """
     if is_in_package:
+        # Change the relative path to the package directory
         rel_path = rospkg.RosPack().get_path("scf4_control")
         path = os.path.join(rel_path, path)
 

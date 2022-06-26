@@ -180,8 +180,7 @@ class SerialHandler():
         # Inform buffers are being prepared
         rospy.loginfo("Preparing buffers...")
 
-        # Prepare buffers
-        self.serial.open()
+        # Reset input and output buffers
         self.serial.reset_input_buffer()
         self.serial.reset_output_buffer()
 
@@ -286,7 +285,7 @@ class SerialHandler():
         Returns:
             str: Information about voltage
         """
-        return self.send_command("M231")
+        return self.send_command("M247")
 
     def move(self, *args):
         """Instructs the motors to move by a certain amount of steps
