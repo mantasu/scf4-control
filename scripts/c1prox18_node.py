@@ -16,7 +16,11 @@ def run_c1prox18(freq=10):
         camera.publish()
         interval.sleep()
 
+        if rospy.is_shutdown():
+            # Release capture frame
+            camera.capture.release()
+
 if __name__ == '__main__':
     # Initialize & run the node
-    rospy.init_node("c1prox18")
+    rospy.init_node("c1prox18", anonymous=True)
     run_c1prox18()

@@ -1,2 +1,3 @@
 rospkg
 pyserial
+opencv-python

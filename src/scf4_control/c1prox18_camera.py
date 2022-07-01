@@ -1,6 +1,11 @@
+import cv2
 import rospy
+
+from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
 from scf4_control.msg import Scf4
+
+from cv_bridge import CvBridge, CvBridgeError
 from scf4_control.serial_handler import SerialHandler
 from scf4_control.utils import parse_json, adc_to_volt
 
@@ -24,6 +29,13 @@ class C1ProX18:
         rospy.loginfo("Version:\n\t* " + "\n\t* ".join(self.version))
         rospy.loginfo("Voltage: " + (f"{self.voltage}" if self.voltage else "N/A"))
 
+        # TODO: device goes to config.json file
+        self.capture = cv2.VideoCapture(-1)
+        rospy.loginfo(f"Opened capture device: {self.capture.isOpened()}")
+
+        self.cv_bridge = CvBridge()
+
+
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
@@ -33,6 +45,8 @@ class C1ProX18:
             "/scf4", Scf4, self.scf4_callback, queue_size=10)
 
         # For image data check http://wiki.ros.org/Sensors/Cameras
+        self.cam_publisher = rospy.Publisher(
+            "/camera", CompressedImage, queue_size=1)
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -145,4 +159,10 @@ class C1ProX18:
             self.serial_handler.wait(scf4.wait)
 
     def publish(self):
-        pass
+        ret, frame = self.capture.read()
+        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(frame)
+
+        try:
+            self.cam_publisher.publish(frame_compressed)
+        except CvBridgeError as e:
+            rospy.logerr(e)

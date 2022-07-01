@@ -9,9 +9,11 @@ Rough TODO:
 * Autofocus
 * Zoom macros (e.g., `zoom 70%`)
 * ROS messages for compressed video
+* Instructions for `catkin_make`, `chmod +x`
+* Dependencies in xml
 
 Currently working on: structure, naming, functionality
-Version: 0.1.0
+Version: 1.1.0
 
 ## Running the code
 
@@ -26,6 +28,12 @@ The package was created using _ROS Noetic_. To control the camera lens with keyb
 
 ```shell
 $ sudo apt-get install ros-noetic-teleop-twist-keyboard
+```
+
+For image messages, [cv_bridge](http://wiki.ros.org/cv_bridge) is required, please install the package:
+
+```shell
+$ sudo apt-get install ros-noetic-cv-bridge
 ```
 
 > For _Windows_, if there are any issues with detecting the proper USB port (STM32 Virtual COM), install the driver from [STMicroelectronics](https://www.st.com/en/development-tools/stsw-stm32102.html).
