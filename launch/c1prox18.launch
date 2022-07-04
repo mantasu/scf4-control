@@ -1,3 +1,9 @@
 <launch>
-    <node name="c1prox18" pkg="scf4_control" type="c1prox18_node.py" output="screen"/>
+    <!-- Command line arguments for python argparser -->
+    <arg name="config_path" default="config.json"/>
+    <arg name="is_relative" default="true"/>
+
+    <!-- Launch the actual node, i.e., the python script with command-line arguments -->
+    <node name="c1prox18" pkg="scf4_control" type="c1prox18_node.py" output="screen"
+     args="--config-path $(arg config_path) --is-relative $(arg is_relative)"/>
 </launch>

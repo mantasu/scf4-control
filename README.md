@@ -21,6 +21,7 @@ Version: 1.1.0
 The code was implemented using _Python 3.8.10_ and the libraries listed in [requirements.txt](requirements.txt). You can install these libraries using `conda` (see [this](https://stackoverflow.com/questions/51042589/conda-version-pip-install-r-requirements-txt-target-lib)) or via `pip` by running the following command:
 
 ```shell
+$ pip install --upgrade pip
 $ pip install -r requirements.txt
 ```
 

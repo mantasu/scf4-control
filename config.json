@@ -1,25 +1,36 @@
 {
-    "port": "/dev/ttyACM0",
-    "baudrate": 115200,
-    "timeout": 5,
-    "A": {
-        "jog_steps": 50,
-        "steps_min": 1,
-        "steps_max": 65535,
-        "speed_min": 400,
-        "speed_max": 4000,
-        "count_min": 0,
-        "count_max": 65535,
-        "vel_factor": 1000
+    "camera": {
+        "device_id": -1,
+        "fps": 30,
+        "width": 1920,
+        "height": 1080,
+        "format": "jpg"
     },
-    "B": {
-        "jog_steps": 25,
-        "steps_min": 1,
-        "steps_max": 65535,
-        "speed_min": 400,
-        "speed_max": 4000,
-        "count_min": 0,
-        "count_max": 65535,
-        "vel_factor": 1000
+    "serial": {
+        "port": "/dev/ttyACM0",
+        "baudrate": 115200,
+        "timeout": 5
+    },
+    "motors": {
+        "A": {
+            "jog_steps": 50,
+            "steps_min": 1,
+            "steps_max": 65535,
+            "speed_min": 400,
+            "speed_max": 4000,
+            "count_min": 0,
+            "count_max": 65535,
+            "vel_factor": 1000
+        },
+        "B": {
+            "jog_steps": 25,
+            "steps_min": 1,
+            "steps_max": 65535,
+            "speed_min": 400,
+            "speed_max": 4000,
+            "count_min": 0,
+            "count_max": 65535,
+            "vel_factor": 1000
+        }
     }
 }

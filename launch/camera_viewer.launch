@@ -1,3 +1,9 @@
 <launch>
-    <node name="camera_viewer" pkg="scf4_control" type="camera_viewer_node.py" output="screen"/>
+    <!-- Command line arguments for python argparser -->
+    <arg name="width" default="1920"/>
+    <arg name="height" default="1080"/>
+
+    <!-- Launch the actual node, i.e., the python script with command-line arguments -->
+    <node name="camera_viewer" pkg="scf4_control" type="camera_viewer_node.py" output="screen"
+     args="--width $(arg width) --height $(arg height)"/>
 </launch>

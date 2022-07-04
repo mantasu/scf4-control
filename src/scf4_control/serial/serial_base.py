@@ -1,19 +1,10 @@
 import rospy
 import serial
 
-class SerialHandler():
-    def __init__(self, config):
-        """Initializes the serial handler
-
-        Simply assigns a configuration dictionary as an attribute and
-        sets the serial object to `None` (until it's connected).
-
-        Args:
-            config (dict): The configuration file for the SCF4
-                controller. For more information about its key-values
-                check the README.md file
-        """
-        self.config = config
+class SerialBase():
+    def __init__(self, serial_config, motors_config):
+        # Merge both configs and initialize serial object
+        self.config = serial_config.update(motors_config)
         self.serial = None
     
     def _verify_steps(self, steps, motor_type):
@@ -124,29 +115,6 @@ class SerialHandler():
                 cmd += " " + motor_speed
         
         return cmd
-    
-    def _init_controller(self):
-        """Initializes the motor controller and its driver
-
-        The initialization process (G-code commands):
-            1. Reset and initialize motor driver
-            2. Set stepping (should be 64 by default)
-            3. Set normal move
-            4. Switch to relative coordinate programming mode
-            5. Energize PI LED
-            6. Set motors and IR filter driver current
-            7. Set motor idle current
-            8. Set PI low/high detection voltage
-        """
-        # Initialize the motor controller via G-code commands
-        self.send_command("$B2")
-        self.send_command("M243 C6")
-        self.send_command("M230")
-        self.send_command("G91")
-        self.send_command("M238")
-        self.send_command("M234 A190 B190 C190 D90")
-        self.send_command("M235 A120 B120 C120")
-        self.send_command("M232 A400 B400 C400 E700 F700 G700")
 
     def connect(self, port=None, baudrate=None, timeout=None):
         """Initializes connection via serial port to SCF4
@@ -376,7 +344,7 @@ class SerialHandler():
         cmd = "G90" if type == 0 else "G91"
         self.send_command(cmd)
     
-    def set_motor_move_mode(self, type):
+    def set_motor_move_mode(self, type, *args):
         """Sets the motor movement mode to "normal" or "forced"
 
         Sends a G-code command via serial port to tell the SCF4
@@ -392,9 +360,12 @@ class SerialHandler():
         Args:
             type (int): The type of movement mode: `0` (normal) or
                 `1` (forced)
+            *args: Additional values of type str specifying motors to
+                target, e.g., "A". If none, all are targeted
         """
         # Generate G-code command and send it
         cmd = "M230" if type == 0 else "M231"
+        cmd += (" " + " ".join(args)).strip()
         self.send_command(cmd)
     
     def wait(self, time):
@@ -419,5 +390,3 @@ class SerialHandler():
         mode.
         """
         self.send_command("M0")
-
-    

@@ -6,35 +6,29 @@ from geometry_msgs.msg import Twist
 from scf4_control.msg import Scf4
 
 from cv_bridge import CvBridge, CvBridgeError
-from scf4_control.serial_handler import SerialHandler
-from scf4_control.utils import parse_json, adc_to_volt
+from scf4_control.serial.serial_handler import SerialHandler
+from scf4_control.utils import parse_json
 
 class C1ProX18:
-    def __init__(self, config_path="config.json"):
-        # Last speed vals to check changes
-        self.speed_last = {"A": 0, "B": 0}
+    def __init__(self, config_path="config.json", is_relative=True):
+        # Parse config.json from the given file path
+        config = parse_json(config_path, is_relative)
 
-        # Parse config file and init SH
-        config = parse_json(config_path)
-        self.serial_handler = SerialHandler(config)
+        # Self config is only camera
+        self.config = config["camera"]
 
-        # Connect to the SCF4 module
-        self.serial_handler.connect()
+        # Create a serial handler to handle the G-code via serial port
+        self.serial_handler = SerialHandler(config["serial"], config["motors"])
 
-        # Assign the firmware version and the serial voltage params 
-        self.version = self.serial_handler.get_version().split(', ')
-        self.voltage = adc_to_volt(self.serial_handler.get_voltage())
-
-        # Log information about version and voltage of the SCF4 module
-        rospy.loginfo("Version:\n\t* " + "\n\t* ".join(self.version))
-        rospy.loginfo("Voltage: " + (f"{self.voltage}" if self.voltage else "N/A"))
-
-        # TODO: device goes to config.json file
-        self.capture = cv2.VideoCapture(-1)
+        # Open video capture device (C1ProX18 camera) and log it
+        self.capture = cv2.VideoCapture(self.config["device_id"])
         rospy.loginfo(f"Opened capture device: {self.capture.isOpened()}")
 
+        # OpenCV bridge for messages
         self.cv_bridge = CvBridge()
 
+        # Last speed vals to check changes
+        self.speed_last = {"A": 0, "B": 0}
 
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
@@ -160,7 +154,9 @@ class C1ProX18:
 
     def publish(self):
         ret, frame = self.capture.read()
-        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(frame)
+
+        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(
+            frame, dst_format=self.config["format"])
 
         try:
             self.cam_publisher.publish(frame_compressed)
