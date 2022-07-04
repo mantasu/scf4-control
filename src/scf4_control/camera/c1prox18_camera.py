@@ -1,5 +1,6 @@
 import cv2
 import rospy
+import threading
 
 from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
@@ -98,6 +99,9 @@ class C1ProX18:
                 rospy.loginfo(f"Motor {motor_type} speed changed to {speed}")
 
         return speed, steps
+    
+    def reset_motion_tracker(self):
+        pass
 
     def vel_callback(self, twist):
         """Coverts twist object to a G-code command and send it
@@ -123,6 +127,8 @@ class C1ProX18:
 
         # Set last twist value
         self.twist_last = twist
+
+        self.reset_motion_tracker()
     
     def scf4_callback(self, scf4):
         if scf4.stop:

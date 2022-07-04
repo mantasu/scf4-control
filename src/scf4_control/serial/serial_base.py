@@ -140,26 +140,17 @@ class SerialBase():
         baudrate = self.config["baudrate"] if baudrate is None else baudrate
         
         # Inform which port the connection is occurring
-        rospy.loginfo(f"Connecting via port {port}...")
+        rospy.loginfo(f"Connecting via port {port}... \r")
 
         # Initialize the serial object by specifying its parameters
         self.serial = serial.Serial(port, baudrate, timeout=timeout)
-
-        # Inform buffers are being prepared
-        rospy.loginfo("Preparing buffers...")
 
         # Reset input and output buffers
         self.serial.reset_input_buffer()
         self.serial.reset_output_buffer()
 
-        # Inform the controller is being initialized
-        rospy.loginfo("Initializing the controller...")
-
-        # Initialize controller
-        self._init_controller()
-
         # Inform success connection
-        rospy.loginfo("Connected")
+        rospy.loginfo("Done")
     
     def disconnect(self):
         """Closes communication via serial port
