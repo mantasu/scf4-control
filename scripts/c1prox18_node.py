@@ -26,12 +26,12 @@ def parse_args():
     parser.add_argument("-p", "--config-path", type=str,
         default=DEFAULT_CONFIG_PATH, help="The path to JSON config file")
 
-    # Add an argument for whether the path is within the pkg
-    parser.add_argument("--is-relative", action="store_true",
+    # Add an argument for whether the path is in pkg
+    parser.add_argument("--is-relative", type=bool,
         default=True, help="Whether the path is relative to this package")
 
-    # Parse command-line args
-    args = parser.parse_args()
+    # Parse known command-line arguments
+    args, _ = parser.parse_known_args()
 
     return args.config_path, args.is_relative
 

@@ -18,15 +18,15 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Add an argument for the output video width
-    parser.add_argument("-w", "--width", type=int,
+    parser.add_argument("--width", type=int,
         default=1920, help="The output video width")
 
     # Add an argument for the output video height
-    parser.add_argument("-h", "--height", type=int,
+    parser.add_argument("--height", type=int,
         default=1080, help="The output video height")
 
-    # Parse command-line args
-    args = parser.parse_args()
+    # Parse known command-line arguments
+    args, _ = parser.parse_known_args()
 
     return args.width, args.height
 
@@ -39,6 +39,8 @@ def run_camera_viewer(args=(), freq=10):
         # While not down
         interval.sleep()
     
+    print("check", rospy.is_shutdown())
+
     # Destroy opencv window
     cv2.destroyAllWindows()
 

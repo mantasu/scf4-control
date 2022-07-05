@@ -57,3 +57,8 @@ Visualize the **C1 PRO** camera output by running:
 ```
 $ TODO
 ```
+
+## Configuration file `config.json`
+
+### Camera
+* `fourcc` - 4-character code of codec used to compress the frames. List of codes can be obtained at [Video Codecs by FOURCC](https://www.fourcc.org/codecs/) page. For best quality/compression, please use one of the following: `mp4v` | `mjpg` | `avc1`

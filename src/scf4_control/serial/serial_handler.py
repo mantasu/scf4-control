@@ -1,5 +1,5 @@
 import rospy
-from serial_base import SerialBase
+from scf4_control.serial.serial_base import SerialBase
 from scf4_control.utils import adc_to_volt
 
 class SerialHandler(SerialBase):

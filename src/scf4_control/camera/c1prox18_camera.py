@@ -1,6 +1,5 @@
 import cv2
 import rospy
-import threading
 
 from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
@@ -9,21 +8,13 @@ from scf4_control.msg import Scf4
 from cv_bridge import CvBridge, CvBridgeError
 from scf4_control.serial.serial_handler import SerialHandler
 from scf4_control.utils import parse_json
+from scf4_control.camera.motor_tracker import MotorTracker
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
         # Parse config.json from the given file path
         config = parse_json(config_path, is_relative)
-
-        # Self config is only camera
-        self.config = config["camera"]
-
-        # Create a serial handler to handle the G-code via serial port
-        self.serial_handler = SerialHandler(config["serial"], config["motors"])
-
-        # Open video capture device (C1ProX18 camera) and log it
-        self.capture = cv2.VideoCapture(self.config["device_id"])
-        rospy.loginfo(f"Opened capture device: {self.capture.isOpened()}")
+        self.config = {**config["camera"], **config["tracker"]}
 
         # OpenCV bridge for messages
         self.cv_bridge = CvBridge()
@@ -31,9 +22,25 @@ class C1ProX18:
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
 
+        # Open video capture device (C1ProX18 camera) and log it
+        fourcc = cv2.VideoWriter_fourcc(*self.config["fourcc"])
+        fps = self.config["fps"]
+
+
+        self.capture = cv2.VideoCapture(self.config["device_id"])
+        self.vid_out = cv2.VideoWriter()
+        rospy.loginfo(f"Opened capture device: {self.capture.isOpened()}")
+
+        
+
+        # Create a serial handler to handle the G-code via serial port
+        #self.serial_handler = SerialHandler(config["serial"], config["motors"])
+
+        #self.motor_tracker = MotorTracker(self.capture, self.serial_handler, self.config["min_idle_time"])
+
         # Subscriber for velocity changes for motor control
-        self.vel_subscriber = rospy.Subscriber(
-            "/cmd_vel", Twist, self.vel_callback, queue_size=10)
+        #self.vel_subscriber = rospy.Subscriber(
+        #    "/cmd_vel", Twist, self.vel_callback, queue_size=10)
         
         # Subscriber for attribute changes for motor control
         self.scf4_subscriber = rospy.Subscriber(
@@ -99,9 +106,6 @@ class C1ProX18:
                 rospy.loginfo(f"Motor {motor_type} speed changed to {speed}")
 
         return speed, steps
-    
-    def reset_motion_tracker(self):
-        pass
 
     def vel_callback(self, twist):
         """Coverts twist object to a G-code command and send it

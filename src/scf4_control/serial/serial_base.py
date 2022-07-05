@@ -4,7 +4,7 @@ import serial
 class SerialBase():
     def __init__(self, serial_config, motors_config):
         # Merge both configs and initialize serial object
-        self.config = serial_config.update(motors_config)
+        self.config = {**serial_config, **motors_config}
         self.serial = None
     
     def _verify_steps(self, steps, motor_type):
