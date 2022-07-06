@@ -1,5 +1,7 @@
+import os
 import cv2
 import rospy
+from sys import platform
 
 from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
@@ -7,30 +9,19 @@ from scf4_control.msg import Scf4
 
 from cv_bridge import CvBridge, CvBridgeError
 from scf4_control.serial.serial_handler import SerialHandler
-from scf4_control.utils import parse_json
-from scf4_control.camera.motor_tracker import MotorTracker
+from scf4_control.utils import parse_json, verify_path, get_fourcc
+from scf4_control.tracker.motor_tracker import MotorTracker
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
         # Parse config.json from the given file path
         config = parse_json(config_path, is_relative)
-        self.config = {**config["camera"], **config["tracker"]}
 
-        # OpenCV bridge for messages
-        self.cv_bridge = CvBridge()
+        self._init_capture(config["capture"])
+        self._init_writer(config["writer"])
 
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
-
-        # Open video capture device (C1ProX18 camera) and log it
-        fourcc = cv2.VideoWriter_fourcc(*self.config["fourcc"])
-        fps = self.config["fps"]
-
-
-        self.capture = cv2.VideoCapture(self.config["device_id"])
-        self.vid_out = cv2.VideoWriter()
-        rospy.loginfo(f"Opened capture device: {self.capture.isOpened()}")
-
         
 
         # Create a serial handler to handle the G-code via serial port
@@ -49,6 +40,81 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(
             "/camera", CompressedImage, queue_size=1)
+    
+    
+    def _init_capture(self, config):
+        # Open CV bridge for ros msg
+        self.cv_bridge = CvBridge()
+
+        self.img_format = config["format"]
+
+        if config["backend"] < 0:
+            if platform == "linux":
+                # V4L2 for the Linux OS
+                backend = cv2.CAP_V4L2
+            elif platform == "darwin":
+                # AvFoundation for the MAC iOS
+                backend = cv2.CAP_AVFOUNDATION
+            elif platform == "win32":
+                # DirectShow for win32
+                backend = cv2.CAP_DSHOW
+            else:
+                # Otherwise pick auto
+                backend = cv2.CAP_ANY
+        else:
+            # Otherwise enum is provided
+            backend = config["backend"]
+
+        # Initialize and open video capture device based on ID & API
+        self.capture = cv2.VideoCapture(config["device_id"], backend)
+
+        if self.capture.isOpened():
+            # Log the capture device ID and the video capture API
+            rospy.loginfo(f"Successfully opened capture device:"
+                          f"\n\t* DEV: {config['device_id']}"
+                          f"\n\t* API: {self.capture.getBackendName()}")
+        else:
+            # Log the error if ID or API of the capture device is wrong
+            rospy.logerr(f"Invalid capture device '{config['device_id']}'"
+                         f" or video capture API (backend): '{backend}'")
+
+            # Throw an Open CV error if either device ID or API is bad
+            raise cv2.error(f"Failed to init/open the capture device")
+        
+        # Acquire an actual FOURCC object based on the code
+        fourcc = cv2.VideoWriter.fourcc(*config["fourcc"])
+
+        # Set config properties for the capture device
+        self.capture.set(cv2.CAP_PROP_FOURCC, fourcc)
+        self.capture.set(cv2.CAP_PROP_FPS, config["fps"])
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, config["width"])
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, config["height"])
+        
+        # Check the actual properties for camera
+        fps = self.capture.get(cv2.CAP_PROP_FPS)
+        width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc_name = get_fourcc(int(self.capture.get(cv2.CAP_PROP_FOURCC)))
+
+        # Log the assigned capture device properties
+        rospy.loginfo(f"Capture device properties:"
+                      f"\n\t* 4CC: {fourcc_name}"
+                      f"\n\t* FPS: {fps}"
+                      f"\n\t* RES: {width}x{height}")
+
+    def _init_writer(self, config):
+        # Verify output directory and create it or nested dirs if needed
+        out_dir = verify_path(config["out_dir"], config["is_relative"])
+
+        # Callback to create an actual video writer
+        self.make_writer = lambda: cv2.VideoWriter(
+            os.path.join(out_dir, f"{rospy.get_time()}.{config['format']}"),
+            cv2.VideoWriter.fourcc(*config["fourcc"]),
+            config["fps"],
+            (config["width"], config["height"]))
+        
+        # Log the directory at which the video recordings will be saved
+        rospy.loginfo(f"Recordings (if any) will be saved at {out_dir}")
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -165,10 +231,20 @@ class C1ProX18:
     def publish(self):
         ret, frame = self.capture.read()
 
-        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(
-            frame, dst_format=self.config["format"])
+        if self.is_recording:
+            self.write_video(frame)
 
+        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(
+            frame, dst_format=self.img_format)
+        
         try:
             self.cam_publisher.publish(frame_compressed)
         except CvBridgeError as e:
             rospy.logerr(e)
+    
+    def write_video(self):
+        if self.is_recording:
+            rospy.logwarn("Recording is already in process.")
+            return
+        
+        self.is_recording

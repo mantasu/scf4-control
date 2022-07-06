@@ -1,4 +1,5 @@
 import os
+import cv2
 import json
 import rospkg
 
@@ -34,6 +35,34 @@ def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
 
     return v_in
 
+def verify_path(path, is_in_package=True):
+    """Verifies the path
+
+    If the path is relative to the SCF4 package, it is appended to the
+    absolute directory of the SCF4 package. It also checks whether the
+    path itself exists and if it does not, it creates the corresponding
+    directory(-ies) contained within the path.
+
+    Args:
+        path (str): The desired directory or path to file
+        is_in_package (bool, optional): Whether the relative path is in
+            package. Defaults to True.
+
+    Returns:
+        str: An existing verified path
+    """
+    if is_in_package:
+        # Change the relative path to the package directory
+        rel_path = rospkg.RosPack().get_path("scf4_control")
+        path = os.path.join(rel_path, path)
+    
+    if not os.path.exists(path):
+        # Get the non-existing full path to the directory and create it 
+        dirname = path if os.path.isdir(path) else os.path.dirname(path)
+        os.makedirs(dirname)
+    
+    return path
+
 def parse_json(path, is_in_package=True):
     """Reads a json file and converts to python dictionary
 
@@ -42,18 +71,38 @@ def parse_json(path, is_in_package=True):
 
     Args:
         path (str): The path to the json file
-        is_in_package (bool): Whether the relative path is in package
+        is_in_package (bool, optional): Whether the relative path is in
+            package. Defaults to True.
 
     Returns:
         dict: A parsed json dictionary
     """
-    if is_in_package:
-        # Change the relative path to the package directory
-        rel_path = rospkg.RosPack().get_path("scf4_control")
-        path = os.path.join(rel_path, path)
+    # Verify the path to the given JSON file
+    path = verify_path(path, is_in_package)
 
     with open(path, 'r') as f:
         # Parse to python dict
         data = json.load(f)
     
     return data
+
+
+def get_fourcc(fourcc):
+    """Converts integer FOURCC to character code
+
+    Takes an integer value which is converted to hexadecimal number
+    which can be decoded into a string name.
+
+    Note: https://stackoverflow.com/a/71838016
+
+    Args:
+        fourcc_code (int): The integer encoding the 4-character code
+
+    Returns:
+        str: A decoded FOURCC
+    """
+    fourcc_name = bytes([
+        v & 255 for v in (fourcc, fourcc >> 8, fourcc >> 16, fourcc >> 24)
+    ]).decode()
+    
+    return fourcc_name

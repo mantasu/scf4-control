@@ -1,15 +1,21 @@
 {
-    "camera": {
+    "capture": {
         "device_id": 0,
         "fps": 30,
         "width": 1920,
         "height": 1080,
-        "fourcc": "avc1",
-        "image_format": "jpg",
-        "video_format": "mp4"
+        "fourcc": "MJPG",
+        "backend": -1,
+        "format": "jpg"
     },
-    "tracker": {
-        "min_idle_time": 3
+    "writer": {
+        "fps": 30,
+        "width": 1920,
+        "height": 1080,
+        "fourcc": "YUYV",
+        "format": "mp4",
+        "out_dir": "videos/",
+        "is_relative": true
     },
     "serial": {
         "port": "/dev/ttyACM0",

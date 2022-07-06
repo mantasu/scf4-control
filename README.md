@@ -60,5 +60,25 @@ $ TODO
 
 ## Configuration file `config.json`
 
-### Camera
+### Capture
 * `fourcc` - 4-character code of codec used to compress the frames. List of codes can be obtained at [Video Codecs by FOURCC](https://www.fourcc.org/codecs/) page. For best quality/compression, please use one of the following: `mp4v` | `mjpg` | `avc1`
+* `backend` - enumerator for video capture API to use as defined in [Flags for video I/O](https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html). By default, it is `-1` in which case **V4L2** is chosen for _Linux_, **AVFoundation** for _Mac_, **DirectShow** for _Windows_, or _auto_ for other OS.
+
+### Writer
+* `out_dir` - the directory to save the captured video files by the camera. If the directory(-ies) does not exist, it is created automatically. Just make sure the program has proper permissions to create directories/files.
+
+
+
+
+
+The camera has been tested for a range of resolutions and the following passed the tests:
+
+| Width  |     | Height | Result |
+| -----: | :-: | :----- | :----: |
+| `640`  | x   | `480`  | ✔      |
+| `720`  | x   | `480`  | ✔      |
+| `720`  | x   | `576`  | ✔      |
+| `800`  | x   | `600`  | ✔      |
+| `1280` | x   | `720`  | ✔      |
+| `1280` | x   | `1024` | ✔      |
+| `1920` | x   | `1080` | ✔      |

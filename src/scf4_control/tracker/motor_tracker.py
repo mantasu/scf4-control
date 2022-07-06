@@ -42,7 +42,7 @@ class FocusTracker(multiprocessing.Process):
         self.fm_callback(fm)
 
 class ZoomTracker(multiprocessing.Process):
-    def __init__(self, on_success_callback, await_callback, min_idle_time):
+    def __init__(self, on_success_callback, await_callback, min_idle_time=3):
         super().__init__()
 
         self.on_success_callback = on_success_callback
