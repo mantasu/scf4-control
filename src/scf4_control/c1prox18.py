@@ -11,30 +11,29 @@ from scf4_control.serial.serial_handler import SerialHandler
 from scf4_control.utils import parse_json, verify_path
 from scf4_control.tracker.motor_tracker import MotorTracker
 
-from scf4_control.camera.tools import Capturer, Recorder
+from scf4_control.tools import Capturer, Recorder
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
-        self.start = None
         # Parse config.json from the given file path
         config = parse_json(config_path, is_relative)
 
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
 
+        # Create capturer and recorder attributes
         self.capturer = Capturer(config["capturer"])
         config["recorder"] = self._verify_recorder_config(config["recorder"])
         self.recorder = Recorder(config["recorder"])
-        
 
         # Create a serial handler to handle the G-code via serial port
-        #self.serial_handler = SerialHandler(config["serial"], config["motors"])
+        self.serial_handler = SerialHandler(config["serial"], config["motors"])
 
-        #self.motor_tracker = MotorTracker(self.capture, self.serial_handler, self.config["min_idle_time"])
+        self.motor_tracker = MotorTracker(self.capturer.capture, self.serial_handler)
 
         # Subscriber for velocity changes for motor control
-        #self.vel_subscriber = rospy.Subscriber(
-        #    "/cmd_vel", Twist, self.vel_callback, queue_size=10)
+        self.vel_subscriber = rospy.Subscriber(
+            "/cmd_vel", Twist, self.vel_callback, queue_size=10)
         
         # Subscriber for attribute changes for motor control
         self.scf4_subscriber = rospy.Subscriber(config["topics"]["motors_sub"],
@@ -156,7 +155,7 @@ class C1ProX18:
         # Set last twist value
         self.twist_last = twist
 
-        self.reset_motion_tracker()
+        self.motor_tracker.reset_zoom_tracking()
     
     def scf4_callback(self, scf4):
         if scf4.stop:

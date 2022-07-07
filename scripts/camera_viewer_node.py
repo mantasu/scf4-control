@@ -3,7 +3,7 @@
 import cv2
 import rospy
 import argparse
-from scf4_control.camera.viewer import CameraViewer
+from scf4_control.viewer import CameraViewer
 
 def parse_args():
     """Parses command-line arguments
