@@ -1,7 +1,8 @@
 import os
-import cv2
 import json
 import rospkg
+
+from datetime import datetime
 
 def adc_to_volt(adc, v_ref=3.3, resolution=4096, scale=0.5, parse=True):
     """Converts ADC value to voltage
@@ -86,7 +87,6 @@ def parse_json(path, is_in_package=True):
     
     return data
 
-
 def get_fourcc(fourcc):
     """Converts integer FOURCC to character code
 
@@ -106,3 +106,9 @@ def get_fourcc(fourcc):
     ]).decode()
     
     return fourcc_name
+
+def get_str_datetime(format="%d-%m-%Y_%H.%M.%S"):
+    now = datetime.now()
+    str_now = now.strftime(format)
+
+    return str_now

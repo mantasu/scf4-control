@@ -1,27 +1,30 @@
 import os
 import cv2
 import rospy
-from sys import platform
 
 from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
-from scf4_control.msg import Scf4
+from scf4_control.msg import Scf4Control, CamControl
 
-from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge import CvBridgeError
 from scf4_control.serial.serial_handler import SerialHandler
-from scf4_control.utils import parse_json, verify_path, get_fourcc
+from scf4_control.utils import parse_json, verify_path
 from scf4_control.tracker.motor_tracker import MotorTracker
+
+from scf4_control.camera.tools import Capturer, Recorder
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
+        self.start = None
         # Parse config.json from the given file path
         config = parse_json(config_path, is_relative)
 
-        self._init_capture(config["capture"])
-        self._init_writer(config["writer"])
-
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
+
+        self.capturer = Capturer(config["capturer"])
+        config["recorder"] = self._verify_recorder_config(config["recorder"])
+        self.recorder = Recorder(config["recorder"])
         
 
         # Create a serial handler to handle the G-code via serial port
@@ -34,87 +37,42 @@ class C1ProX18:
         #    "/cmd_vel", Twist, self.vel_callback, queue_size=10)
         
         # Subscriber for attribute changes for motor control
-        self.scf4_subscriber = rospy.Subscriber(
-            "/scf4", Scf4, self.scf4_callback, queue_size=10)
+        self.scf4_subscriber = rospy.Subscriber(config["topics"]["motors_sub"],
+            Scf4Control, self.scf4_callback, queue_size=10)
+        
+        self.cam_subscriber = rospy.Subscriber(config["topics"]["camera_sub"],
+            CamControl, self.cam_callback, queue_size=10)
 
         # For image data check http://wiki.ros.org/Sensors/Cameras
-        self.cam_publisher = rospy.Publisher(
-            "/camera", CompressedImage, queue_size=1)
+        self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
+            CompressedImage, queue_size=1)
     
-    
-    def _init_capture(self, config):
-        # Open CV bridge for ros msg
-        self.cv_bridge = CvBridge()
+    def _verify_recorder_config(self, config):
+        # Get FPS and resolution for capturer and recorder
+        cap_fps, rec_fps = self.capturer.fps, config["fps"]
+        cap_width, rec_width = self.capturer.width, config["width"]
+        cap_height, rec_height = self.capturer.height, config["height"]
 
-        self.img_format = config["format"]
-
-        if config["backend"] < 0:
-            if platform == "linux":
-                # V4L2 for the Linux OS
-                backend = cv2.CAP_V4L2
-            elif platform == "darwin":
-                # AvFoundation for the MAC iOS
-                backend = cv2.CAP_AVFOUNDATION
-            elif platform == "win32":
-                # DirectShow for win32
-                backend = cv2.CAP_DSHOW
-            else:
-                # Otherwise pick auto
-                backend = cv2.CAP_ANY
-        else:
-            # Otherwise enum is provided
-            backend = config["backend"]
-
-        # Initialize and open video capture device based on ID & API
-        self.capture = cv2.VideoCapture(config["device_id"], backend)
-
-        if self.capture.isOpened():
-            # Log the capture device ID and the video capture API
-            rospy.loginfo(f"Successfully opened capture device:"
-                          f"\n\t* DEV: {config['device_id']}"
-                          f"\n\t* API: {self.capture.getBackendName()}")
-        else:
-            # Log the error if ID or API of the capture device is wrong
-            rospy.logerr(f"Invalid capture device '{config['device_id']}'"
-                         f" or video capture API (backend): '{backend}'")
-
-            # Throw an Open CV error if either device ID or API is bad
-            raise cv2.error(f"Failed to init/open the capture device")
+        if rec_fps > cap_fps:
+            # Log a warning if the FPS for the recorder is too high
+            rospy.logwarn(f"Recorder FPS too high compared to capture device. "
+                          f"Setting recorder FPS from {rec_fps} to {cap_fps}.")
+            
+            # Set FPS to match cap
+            config["fps"] = cap_fps
         
-        # Acquire an actual FOURCC object based on the code
-        fourcc = cv2.VideoWriter.fourcc(*config["fourcc"])
+        if rec_width > cap_width or rec_height > cap_height:
+            # Log a warning if the resolution for recorder is too high
+            rospy.logwarn(f"Recorder resolution too high compared to capture "
+                          f"device. Setting from {rec_width}x{rec_height} to "
+                          f"{cap_width}x{cap_height}.")
 
-        # Set config properties for the capture device
-        self.capture.set(cv2.CAP_PROP_FOURCC, fourcc)
-        self.capture.set(cv2.CAP_PROP_FPS, config["fps"])
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, config["width"])
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, config["height"])
+            # Set config resolution lower
+            config["width"] = cap_width
+            config["height"] = cap_height
         
-        # Check the actual properties for camera
-        fps = self.capture.get(cv2.CAP_PROP_FPS)
-        width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc_name = get_fourcc(int(self.capture.get(cv2.CAP_PROP_FOURCC)))
+        return config
 
-        # Log the assigned capture device properties
-        rospy.loginfo(f"Capture device properties:"
-                      f"\n\t* 4CC: {fourcc_name}"
-                      f"\n\t* FPS: {fps}"
-                      f"\n\t* RES: {width}x{height}")
-
-    def _init_writer(self, config):
-        # Verify output directory and create it or nested dirs if needed
-        out_dir = verify_path(config["out_dir"], config["is_relative"])
-
-        # Callback to create an actual video writer
-        self.make_writer = lambda: cv2.VideoWriter(
-            os.path.join(out_dir, f"{rospy.get_time()}.{config['format']}"),
-            cv2.VideoWriter.fourcc(*config["fourcc"]),
-            config["fps"],
-            (config["width"], config["height"]))
-        
-        # Log the directory at which the video recordings will be saved
-        rospy.loginfo(f"Recordings (if any) will be saved at {out_dir}")
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -228,23 +186,27 @@ class C1ProX18:
         if scf4.wait > 0:
             self.serial_handler.wait(scf4.wait)
 
+    def cam_callback(self, cam_msg):
+        if cam_msg.start_record:
+            # Start to record (optionally for some specified time)
+            self.recorder.start_recording(cam_msg.record_duration)
+        
+        if cam_msg.end_record:
+            # End the recording forcefully
+            self.recorder.end_recording()
+        
+
     def publish(self):
-        ret, frame = self.capture.read()
+        # Get the actual camera frame and the compressed frame
+        frame, frame_compressed_msg = self.capturer.get_frame()
 
-        if self.is_recording:
-            self.write_video(frame)
-
-        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(
-            frame, dst_format=self.img_format)
+        if self.recorder.is_recording:
+            # If recorder is on, pass frame
+            self.recorder.write_video(frame)
         
         try:
-            self.cam_publisher.publish(frame_compressed)
+            # Try publishing the compressed image frame msg
+            self.cam_publisher.publish(frame_compressed_msg)
         except CvBridgeError as e:
+            # If any error
             rospy.logerr(e)
-    
-    def write_video(self):
-        if self.is_recording:
-            rospy.logwarn("Recording is already in process.")
-            return
-        
-        self.is_recording

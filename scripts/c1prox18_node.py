@@ -2,7 +2,7 @@
 
 import rospy
 import argparse
-from scf4_control.camera.c1prox18_camera import C1ProX18
+from scf4_control.camera.c1prox18 import C1ProX18
 
 DEFAULT_CONFIG_PATH = "config.json"
 
@@ -46,8 +46,9 @@ def run_c1prox18(args=(), freq=10):
         interval.sleep()
 
         if rospy.is_shutdown():
-            # Release capture frame
-            camera.capture.release()
+            # Release video capturers
+            camera.capturer.release()
+            camera.recorder.release()
 
 if __name__ == '__main__':
     # Get cmd-line args

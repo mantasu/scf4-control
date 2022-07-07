@@ -1,0 +1,5 @@
+bool start_recording
+bool end_recording
+uint32 record_duration
+
+sensor_msgs/RegionOfInterest roi

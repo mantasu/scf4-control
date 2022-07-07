@@ -10,6 +10,7 @@ project(scf4_control)
 find_package(catkin REQUIRED COMPONENTS
   message_generation  
   geometry_msgs
+  sensor_msgs
   std_msgs
   rospy
 )
@@ -50,7 +51,8 @@ catkin_python_setup()
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  Scf4.msg
+  CamControl.msg
+  Scf4Control.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -70,7 +72,7 @@ add_message_files(
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
-  geometry_msgs std_msgs
+  geometry_msgs sensor_msgs std_msgs
 )
 
 ################################################
@@ -105,7 +107,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES scf4_control
-  CATKIN_DEPENDS message_runtime geometry_msgs rospy std_msgs
+  CATKIN_DEPENDS message_runtime geometry_msgs sensor_msgs rospy std_msgs
 #  DEPENDS system_lib
 )
 
@@ -161,6 +163,7 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   scripts/c1prox18_node.py
+  scripts/camera_viewer_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

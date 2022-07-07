@@ -58,6 +58,15 @@ Visualize the **C1 PRO** camera output by running:
 $ TODO
 ```
 
+### Publishing messages
+
+Start recording
+
+```shell
+$ rostopic pub -1 /cam_in scf4_control/CamControl '{start_recording: true, record_duration: 10}'
+```
+
+
 ## Configuration file `config.json`
 
 ### Capture

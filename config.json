@@ -1,18 +1,23 @@
 {
-    "capture": {
+    "topics": {
+        "motors_sub": "/scf4",
+        "camera_sub": "/cam_in",
+        "camera_pub": "/cam_out"
+    },
+    "capturer": {
         "device_id": 0,
         "fps": 30,
         "width": 1920,
         "height": 1080,
-        "fourcc": "MJPG",
+        "fourcc": "YUYV",
         "backend": -1,
         "format": "jpg"
     },
-    "writer": {
+    "recorder": {
         "fps": 30,
         "width": 1920,
         "height": 1080,
-        "fourcc": "YUYV",
+        "fourcc": "avc1",
         "format": "mp4",
         "out_dir": "videos/",
         "is_relative": true

@@ -3,7 +3,7 @@
 import cv2
 import rospy
 import argparse
-from scf4_control.camera.camera_viewer import CameraViewer
+from scf4_control.camera.viewer import CameraViewer
 
 def parse_args():
     """Parses command-line arguments
@@ -38,8 +38,6 @@ def run_camera_viewer(args=(), freq=10):
     while not rospy.is_shutdown():
         # While not down
         interval.sleep()
-    
-    print("check", rospy.is_shutdown())
 
     # Destroy opencv window
     cv2.destroyAllWindows()

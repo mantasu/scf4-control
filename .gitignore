@@ -1,3 +1,17 @@
+# Environments
+env
 venv
+conda_env
+
+# Vscode
 .vscode
+
+# Generated
+*.pyc
 __pycache__
+
+# Videos
+/saved
+/videos
+/recorded
+/recordings
