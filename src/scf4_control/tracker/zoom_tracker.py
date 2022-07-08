@@ -64,12 +64,12 @@ class ZoomTracker(multiprocessing.Process):
                 
                 # Calculate total duration motor has been idle
                 idle_dur = rospy.get_time() - self._start_time
-                idle_dur = rospy.Time.to_sec(idle_dur)
 
                 if idle_dur >= self.serial_handler.config["min_idle_time"]:
                     # If min idle reached
                     self.set_idle(True)
                     self._is_idle = True
+                    rospy.loginfo("Zoom motor stopped.")
                 else:
                     # If min idle time not reached
                     rospy.sleep(self.sleep_time)

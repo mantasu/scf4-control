@@ -9,7 +9,7 @@ from cv_bridge import CvBridgeError
 from scf4_control.utils import parse_json
 from scf4_control.serial import SerialHandler
 from scf4_control.tracker import MotorTracker
-from scf4_control.tools import Capturer, Recorder
+from scf4_control.tools import Streamer
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
@@ -19,15 +19,9 @@ class C1ProX18:
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
 
-        # Create capturer and recorder attributes
-        self.capturer = Capturer(config["capturer"])
-        config["recorder"] = self._verify_recorder_config(config["recorder"])
-        self.recorder = Recorder(config["recorder"])
-
-        # Create a serial handler to handle the G-code via serial port
+        self.streamer = Streamer(config["capturer"], config["recorder"]).start()
         self.serial_handler = SerialHandler(config["serial"], config["motors"])
-
-        self.motor_tracker = MotorTracker(self.capturer.capture, self.serial_handler)
+        self.motor_tracker = MotorTracker(self.streamer, self.serial_handler)
 
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
@@ -43,32 +37,6 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
-    
-    def _verify_recorder_config(self, config):
-        # Get FPS and resolution for capturer and recorder
-        cap_fps, rec_fps = self.capturer.fps, config["fps"]
-        cap_width, rec_width = self.capturer.width, config["width"]
-        cap_height, rec_height = self.capturer.height, config["height"]
-
-        if rec_fps > cap_fps:
-            # Log a warning if the FPS for the recorder is too high
-            rospy.logwarn(f"Recorder FPS too high compared to capture device. "
-                          f"Setting recorder FPS from {rec_fps} to {cap_fps}.")
-            
-            # Set FPS to match cap
-            config["fps"] = cap_fps
-        
-        if rec_width > cap_width or rec_height > cap_height:
-            # Log a warning if the resolution for recorder is too high
-            rospy.logwarn(f"Recorder resolution too high compared to capture "
-                          f"device. Setting from {rec_width}x{rec_height} to "
-                          f"{cap_width}x{cap_height}.")
-
-            # Set config resolution lower
-            config["width"] = cap_width
-            config["height"] = cap_height
-        
-        return config
 
     
     def _vel_callback_helper(self, twist, motor_type):
@@ -186,20 +154,15 @@ class C1ProX18:
     def cam_callback(self, cam_msg):
         if cam_msg.start_record:
             # Start to record (optionally for some specified time)
-            self.recorder.start_recording(cam_msg.record_duration)
+            self.streamer.start_recording(cam_msg.record_duration)
         
         if cam_msg.end_record:
             # End the recording forcefully
-            self.recorder.end_recording()
-        
+            self.streamer.end_recording()
 
     def publish(self):
-        # Get the actual camera frame and the compressed frame
-        frame, frame_compressed_msg = self.capturer.get_frame()
-
-        if self.recorder.is_recording:
-            # If recorder is on, pass frame
-            self.recorder.write_video(frame)
+        # Get a camera frame converted to a compressed image message
+        _, frame_compressed_msg = self.streamer.read(return_msg=True)
         
         try:
             # Try publishing the compressed image frame msg
@@ -209,6 +172,5 @@ class C1ProX18:
             rospy.logerr(e)
     
     def release(self):
-        self.motor_tracker.release()
-        self.recorder.release()
-        self.capturer.release()
+        # self.motor_tracker.release()
+        self.streamer.stop()

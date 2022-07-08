@@ -21,13 +21,12 @@ class Recorder():
 
         # Init attributes
         self.writer = None
-        self.is_released = True
         self.is_recording = False
         self.start_timestamp = None
         self.writer_duration = None
     
     def start_recording(self, duration=None):
-        if self.is_recording or not self.is_released:
+        if self.is_recording:
             # If the recorder is already in process of writing
             rospy.logwarn("Recording is already in process.")
             return
@@ -43,14 +42,17 @@ class Recorder():
         rospy.loginfo(f"Recording started{duration_str}.")
     
     def end_recording(self):
-        # Delete initialized params
-        self.is_recording = False
-        self.writer_duration = None
-        self.start_time = None
-        self.release()
+        if self.is_recording:
+            # Delete initialized params
+            self.is_recording = False
+            self.writer_duration = None
+            self.start_time = None
 
-        # Log that the recording has ended
-        rospy.loginfo("Recording finished.")
+            # Log that the recording has ended
+            rospy.loginfo("Recording finished.")
+        else:
+            # If recording hasn't been started yet
+            rospy.loginfo("Start recording first.")
     
     def write_video(self, frame):
         if self.writer_duration is not None and self.writer_duration != 0 and \
@@ -66,5 +68,4 @@ class Recorder():
             # Release and set None
             self.writer.release()
             self.writer = None
-            self.is_released = True
 

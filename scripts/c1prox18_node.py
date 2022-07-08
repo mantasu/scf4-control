@@ -35,7 +35,7 @@ def parse_args():
 
     return args.config_path, args.is_relative
 
-def run_c1prox18(args=(), freq=10):
+def run_c1prox18(args=(), freq=30):
     # Publisher rate and camera
     interval = rospy.Rate(freq)
     camera = C1ProX18(*args)

@@ -174,7 +174,7 @@ class SerialHandler(SerialBase):
                 # If motors have stopped
                 break
             
-            if rospy.Time.to_sec(rospy.get_time() - start_time) > timeout:
+            if rospy.get_time() - start_time > timeout:
                 if on_timeout == "raise":
                     # If the runtime error should be raised on timeout
                     raise RuntimeError("Waited too long for motors to stop")

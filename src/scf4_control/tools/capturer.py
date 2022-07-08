@@ -2,14 +2,10 @@ import cv2
 import rospy
 
 from sys import platform
-from cv_bridge import CvBridge
 from scf4_control.utils import get_fourcc
 
 class Capturer():
     def __init__(self, config):
-        # Open CV bridge for ros msg
-        self.cv_bridge = CvBridge()
-
         # The compression format via bridge
         self.dst_format = config["format"]
 
@@ -87,20 +83,8 @@ class Capturer():
         
         return fps, width, height, fourcc_name
 
-    def get_frame(self):
-        # Read the current capture frame
-        ret, frame = self.capture.read()
-
-        if not ret:
-            # If no response received, log an error, return None
-            rospy.logerr("Could not capture the camera frame.")
-            return None, None
-        
-        # Also compute a compressed frame message for the ROS nodes
-        frame_compressed = self.cv_bridge.cv2_to_compressed_imgmsg(
-            frame, dst_format=self.dst_format)
-        
-        return frame, frame_compressed
+    def read(self):        
+        return self.capture.read()
     
     def release(self):
         # Release the capturer
