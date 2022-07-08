@@ -3,12 +3,12 @@ import rospy
 import multiprocessing
 
 class FocusTracker(multiprocessing.Process):
-    def __init__(self, capture, set_fm, roi=None, sleep_time=0.3):
+    def __init__(self, streamer, set_fm, roi=None, sleep_time=0.3):
         super().__init__()
         
         # Set the attributes
         self.set_fm = set_fm
-        self.capture = capture
+        self.streamer = streamer
         self.sleep_time = sleep_time
         
         if roi is not None:
@@ -59,15 +59,14 @@ class FocusTracker(multiprocessing.Process):
     def run(self):
         while True:
             if self.is_stop_set():
-                # If stop event is set
-                self.capture.release()
+                # Stop
                 break
 
             if self.is_focusing_set():
-                # Get frame from capture device
-                ret, frame = self.capture.read()
+                # Get frame from capture dev
+                frame = self.streamer.read()
 
-                if not ret:
+                if not frame:
                     # Send a warning in case the frame is of type None
                     rospy.logwarn("Missed frame while calculating FM.")
                     continue

@@ -172,5 +172,5 @@ class C1ProX18:
             rospy.logerr(e)
     
     def release(self):
-        # self.motor_tracker.release()
+        self.motor_tracker.release()
         self.streamer.stop()

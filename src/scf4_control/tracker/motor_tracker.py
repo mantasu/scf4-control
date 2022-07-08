@@ -3,10 +3,10 @@ from scf4_control.tracker.zoom_tracker import ZoomTracker
 from scf4_control.tracker.focus_tracker import FocusTracker
 
 class MotorTracker:
-    def __init__(self, capture, serial_handler):
+    def __init__(self, streamer, serial_handler):
 
         # Set passed attributes
-        self.capture = capture
+        self.streamer = streamer
         self.serial_handler = serial_handler
 
         # Init focus props
@@ -17,7 +17,7 @@ class MotorTracker:
 
         # Initialize zoom and focus trackers to check when to focus lens
         self.zoom_tracker = ZoomTracker(self.serial_handler, self.idle_callback)
-        self.focus_tracker = FocusTracker(self.capture, self.fm_callback)
+        self.focus_tracker = FocusTracker(self.streamer, self.fm_callback)
 
         # Start both processes
         self.zoom_tracker.start()
@@ -40,6 +40,7 @@ class MotorTracker:
     
     def adjust_focus(self):
         # Sweep the focus motor until the best position is found and go
+        self.focus_tracker.set_focusing()
         self.serial_handler.sweep_once("B", callback=self.focus_pose_callback)
         self.serial_handler.set_coordinate_mode(0)
         self.serial_handler.move(None, self.focus_pose_best)
