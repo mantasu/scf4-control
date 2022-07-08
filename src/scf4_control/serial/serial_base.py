@@ -5,6 +5,7 @@ class SerialBase():
     def __init__(self, serial_config, motors_config):
         # Merge both configs and initialize serial object
         self.config = {**serial_config, **motors_config}
+        self.N_MOTORS = sum([key in "ABC" for key in motors_config.keys()])
         self.serial = None
     
     def _verify_steps(self, steps, motor_type):
@@ -84,6 +85,8 @@ class SerialBase():
         count = min(count, self.config[motor_type]["count_max"])
         count = max(count, self.config[motor_type]["count_min"])
 
+        return str(count)
+
     def _generate_motor_cmd(self, callback, args, cmd=""):
         """Generates a motor control command given motor values.
 
@@ -111,8 +114,8 @@ class SerialBase():
             if val is not None:
                 # Generate motor name and update cmd
                 motor_type = chr(ord('@') + i + 1)
-                motor_speed = callback(val, motor_type)
-                cmd += " " + motor_speed
+                motor_val = callback(val, motor_type)
+                cmd += " " + motor_val
         
         return cmd
 
@@ -140,7 +143,7 @@ class SerialBase():
         baudrate = self.config["baudrate"] if baudrate is None else baudrate
         
         # Inform which port the connection is occurring
-        rospy.loginfo(f"Connecting via port {port}... \r")
+        rospy.loginfo(f"Connecting via port {port}...")
 
         # Initialize the serial object by specifying its parameters
         self.serial = serial.Serial(port, baudrate, timeout=timeout)
@@ -148,9 +151,6 @@ class SerialBase():
         # Reset input and output buffers
         self.serial.reset_input_buffer()
         self.serial.reset_output_buffer()
-
-        # Inform success connection
-        rospy.loginfo("Done")
     
     def disconnect(self):
         """Closes communication via serial port

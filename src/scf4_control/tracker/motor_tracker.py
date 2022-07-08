@@ -1,83 +1,62 @@
-import cv2
-import rospy
-import multiprocessing
-
+from multiprocessing import Process
 from scf4_control.tracker.zoom_tracker import ZoomTracker
 from scf4_control.tracker.focus_tracker import FocusTracker
 
 class MotorTracker:
-    def __init__(self, capture, serial_handler, min_static_dur):
+    def __init__(self, capture, serial_handler):
 
-        # Assign passed attributes
+        # Set passed attributes
         self.capture = capture
         self.serial_handler = serial_handler
-        self.min_static_dur = min_static_dur
 
-        self.fm = None
-        self.is_idle_zoom = False
-        self.idle_zoom_pos = self.serial_handler.get_motor_position("A")
+        # Init focus props
+        self.fm_best = 0.0
+        self.fm_curr = None
+        self.focus_pos_best = None
+        self.adjust_process = None
 
-        self.zoom_tracker = ZoomTracker(self.serial_handler,
-            self._set_idle_zoom, self.min_static_dur)
-        
-        self.focus_tracker = FocusTracker(self.capture,
-            self._set_focal_measure)
+        # Initialize zoom and focus trackers to check when to focus lens
+        self.zoom_tracker = ZoomTracker(self.serial_handler, self.idle_callback)
+        self.focus_tracker = FocusTracker(self.capture, self.fm_callback)
 
+        # Start both processes
         self.zoom_tracker.start()
-    
-    def _set_idle_zoom(self, is_idle=True):
-        """Sets the idle status for the zoom motor
-
-        Takes either `True` or `False` and updates this class' attribute
-        which tells whether the zoom motor is idle (more precisely,
-        whether it has been in idle for quite some time). If it is
-        `True`, it also updates the idle motor position.
-
-        Args:
-            is_idle (bool, optional): Whether to update the zoom motor
-                status to idle/stopped/static. Defaults to True.
-        """
-        # Update the class attribute
-        self.is_idle_zoom = is_idle
-
-        if is_idle:
-            # If static, also update the position at which it is stopped
-            self.idle_zoom_pos = self.serial_handler.get_motor_position("A")
-            self.zoom_tracker.terminate()
-            self.find_best_focus_pos()
-    
-    def _set_focal_measure(self, fm):
-        self.fm = fm
-
-    def reset_zoom_tracking(self):
-        self.zoom_tracker.terminate()
-        self._set_idle_zoom(False)
-        
-        self.zoom_tracker = ZoomTracker(self.serial_handler,
-            self._set_idle_zoom, self.min_static_dur)
-        
-        self.zoom_tracker.start()
-    
-    def find_best_focus_pos(self):
-        self.focus_tracker = FocusTracker(self.capture,
-            self._set_focal_measure)
-        
         self.focus_tracker.start()
-
-        pos_min = self.serial_handler.config["B"]["count_min"]
-        pos_max = self.serial_handler.config["B"]["count_max"]
-
+    
+    def idle_callback(self, is_idle=True):
+        if is_idle:
+            self.adjust_process = Process(target=self.adjust_focus)
+            self.adjust_process.start()
+    
+    def fm_callback(self, fm):
+        # Assign current fm
+        self.fm_curr = fm
+    
+    def focus_pose_callback(self, pos):
+        if self.fm_curr > self.fm_best:
+            # If better fm, set it + pos
+            self.fm_best = self.fm_curr
+            self.focus_pos_best = pos
+    
+    def adjust_focus(self):
+        # Sweep the focus motor until the best position is found and go
+        self.serial_handler.sweep_once("B", callback=self.focus_pose_callback)
         self.serial_handler.set_coordinate_mode(0)
-        self.serial_handler.move(None, pos_min)
+        self.serial_handler.move(None, self.focus_pose_best)
         self.serial_handler.await_idle("B")
-        self.serial_handler.move(None, pos_max)
-        
-        best_fm = 0
-        
-        while self.serial_handler.is_moving("B"):
-            if self.fm > best_fm:
-                best_fm = self.fm
-                self.best_focus_pos = self.serial_handler.get_motor_position("B")
-        
-        self.serial_handler.move(None, self.best_focus_pos)
         self.serial_handler.set_coordinate_mode(1)
+
+        # Reset focus args
+        self.fm_best = 0
+        self.focus_pos_best = None
+    
+    def release(self):
+        if self.adjust_process is not None:
+            self.adjust_process.terminate()
+        
+        self.zoom_tracker.set_stop()
+        self.focus_tracker.set_stop()
+
+        self.zoom_tracker.join()
+        self.focus_tracker.join()
+        

@@ -3,8 +3,6 @@ from scf4_control.serial.serial_base import SerialBase
 from scf4_control.utils import adc_to_volt
 
 class SerialHandler(SerialBase):
-    SWITCH_POSITION = 32767
-
     def __init__(self, serial_config, motors_config):
         """Initializes the serial handler
 
@@ -49,8 +47,8 @@ class SerialHandler(SerialBase):
             7. Set motor idle current
             8. Set PI low/high detection voltage
         """
-        # Inform the controller initialization started
-        rospy.loginfo("Initializing controller... \r")
+        # Log the controller initialization started
+        rospy.loginfo("Initializing controller...")
 
         # Initialize the motor controller via G-code commands
         self.send_command("$B2")
@@ -62,14 +60,14 @@ class SerialHandler(SerialBase):
         self.send_command("M235 A120 B120 C120")
         self.send_command("M232 A400 B400 C400 E700 F700 G700")
 
-        # Done initialization
-        rospy.loginfo("Done")
+        # Retrieve the minimum speed for each motor and set it
+        self.set_speed(*self.retrieve_motors_prop("speed_min"))
     
     def _init_motors(self):
-        
-        # Inform that motor initialization started
-        rospy.loginfo("Initializing motors... \r")
+        # Log that motor initialization started
+        rospy.loginfo("Initializing motors...")
 
+        # Determine where to move based on switch
         status = self.get_status().split(", ")
         steps = [
             100 * (-1 if status[3] == "1" else 1),
@@ -77,29 +75,46 @@ class SerialHandler(SerialBase):
             100 * (-1 if status[5] == "1" else 1),
         ]
 
+        # Move moors towards switch
         self.set_coordinate_mode(1)
         self.set_motor_move_mode(1)
-        self.move(steps[:len(self.motors)])
+        self.move(*steps[:self.N_MOTORS])
         self.await_idle()
 
+        # Go a bit back from switch
         self.set_motor_move_mode(0)
-        self.move(*[-200]*len(self.motors))
+        self.move(*[-200]*self.N_MOTORS)
         self.await_idle()
 
+        # Move till switch reached
         self.set_motor_move_mode(1)
-        self.move(*[100]*len(self.motors))
+        self.move(*[100]*self.N_MOTORS)
         self.await_idle()
 
-        self.set_counter(*[self.SWITCH_POSITION]*len(self.motors))
+        # Set the current coordinate where the switch is as middle
+        self.set_counter(*self.retrieve_motors_prop("switch_pos"))
         self.set_motor_move_mode(0)
         self.set_coordinate_mode(0)
 
+        # Move zoom all the way back to see all
         self.move(self.config["A"]["count_max"])
         self.await_idle()
         self.set_coordinate_mode(1)
+    
+    def retrieve_motors_prop(self, prop):
+        """Retrieves a config property for every motor
 
-        # Done initialization
-        rospy.loginfo("Done")
+        Takes a name of a config property that each motor has and gets
+        that property for every motor.
+
+        Args:
+            prop (str): The name of the motor config attribute
+
+        Returns:
+            lst: A list of properties corresponding to motors
+        """
+
+        return [self.config[chr(i+65)][prop] for i in range(self.N_MOTORS)]
 
     def is_moving(self, *args):
         """Checks if any of the motors are moving
@@ -151,15 +166,15 @@ class SerialHandler(SerialBase):
         Raises:
             RuntimeError: If the timeout has been reached
         """
-        # Check the rospy  start time
-        start_time = rospy.Time.now()
+        # Check the rospy start time
+        start_time = rospy.get_time()
 
         while True:
             if not self.is_moving(*args):
                 # If motors have stopped
                 break
             
-            if rospy.Time.now() - start_time > timeout:
+            if rospy.Time.to_sec(rospy.get_time() - start_time) > timeout:
                 if on_timeout == "raise":
                     # If the runtime error should be raised on timeout
                     raise RuntimeError("Waited too long for motors to stop")
@@ -169,7 +184,7 @@ class SerialHandler(SerialBase):
                     break
             
             # Sleep 0.3 sec
-            rospy.sleep(.1)
+            rospy.sleep(.3)
 
     def get_motor_position(self, *args, return_single_in_list=False):
         """Gets the motor position(-s)
@@ -195,3 +210,30 @@ class SerialHandler(SerialBase):
             return positions[0]
         
         return positions
+    
+    def sweep_once(self, motor, forth=True, reach_start=True, callback=None):
+        pos_min = self.config[motor]["count_min"]
+        pos_max = self.config[motor]["count_max"]
+
+        self.set_coordinate_mode(0)
+
+        if not forth:
+            pos_min, pos_max = pos_max, pos_min
+
+        if reach_start:
+            move_cmd = [pos_min if m == motor else None for m in "ABC"]
+            self.move(*move_cmd)
+            self.await_idle(motor)
+        
+        move_cmd = [pos_max if m == motor else None for m in "ABC"]
+        self.move(*move_cmd)
+
+        while True:
+            if not self.is_moving(motor):
+                break
+            
+            if callback is not None:
+                callback(self.get_motor_position(motor))
+        
+        self.set_coordinate_mode(1)
+            

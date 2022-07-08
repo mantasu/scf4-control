@@ -9,7 +9,7 @@
         "fps": 30,
         "width": 1920,
         "height": 1080,
-        "fourcc": "YUYV",
+        "fourcc": "MJPG",
         "backend": -1,
         "format": "jpg"
     },
@@ -28,6 +28,7 @@
         "timeout": 5
     },
     "motors": {
+        "min_idle_time": 1,
         "A": {
             "jog_steps": 50,
             "steps_min": 1,
@@ -36,7 +37,8 @@
             "speed_max": 4000,
             "count_min": 0,
             "count_max": 65535,
-            "vel_factor": 1000
+            "vel_factor": 1000,
+            "switch_pos": 32767
         },
         "B": {
             "jog_steps": 25,
@@ -46,7 +48,8 @@
             "speed_max": 4000,
             "count_min": 0,
             "count_max": 65535,
-            "vel_factor": 1000
+            "vel_factor": 1000,
+            "switch_pos": 32767
         }
     }
 }

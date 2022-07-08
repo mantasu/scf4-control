@@ -1,16 +1,14 @@
-import os
-import cv2
 import rospy
 
-from sensor_msgs.msg import CompressedImage
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import CompressedImage
 from scf4_control.msg import Scf4Control, CamControl
 
 from cv_bridge import CvBridgeError
-from scf4_control.serial.serial_handler import SerialHandler
-from scf4_control.utils import parse_json, verify_path
-from scf4_control.tracker.motor_tracker import MotorTracker
 
+from scf4_control.utils import parse_json
+from scf4_control.serial import SerialHandler
+from scf4_control.tracker import MotorTracker
 from scf4_control.tools import Capturer, Recorder
 
 class C1ProX18:
@@ -155,7 +153,7 @@ class C1ProX18:
         # Set last twist value
         self.twist_last = twist
 
-        self.motor_tracker.reset_zoom_tracking()
+        self.motor_tracker.zoom_tracker.set_moving()
     
     def scf4_callback(self, scf4):
         if scf4.stop:
@@ -209,3 +207,8 @@ class C1ProX18:
         except CvBridgeError as e:
             # If any error
             rospy.logerr(e)
+    
+    def release(self):
+        self.motor_tracker.release()
+        self.recorder.release()
+        self.capturer.release()

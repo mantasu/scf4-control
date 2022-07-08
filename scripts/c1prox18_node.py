@@ -46,9 +46,8 @@ def run_c1prox18(args=(), freq=10):
         interval.sleep()
 
         if rospy.is_shutdown():
-            # Release video capturers
-            camera.capturer.release()
-            camera.recorder.release()
+            # Free resources
+            camera.release()
 
 if __name__ == '__main__':
     # Get cmd-line args
