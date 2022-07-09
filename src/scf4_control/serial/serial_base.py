@@ -190,6 +190,7 @@ class SerialBase():
         Returns:
             str: A response from the control module
         """
+        #print(f">> {command}")
         try:
             # Send the G-code command and get the response
             self.serial.write(bytes(command + "\r\n", "utf8"))
@@ -197,7 +198,7 @@ class SerialBase():
         except AttributeError:
             # If the connection hasn't been established
             rospy.logerr("Connect to the port first!")
-
+        #print(f"<< {response}")
         return response
     
     def get_version(self):
@@ -354,9 +355,13 @@ class SerialBase():
             *args: Additional values of type str specifying motors to
                 target, e.g., "A". If none, all are targeted
         """
+        if len(args) == 0:
+            # By default
+            args = "ABC"
+
         # Generate G-code command and send it
         cmd = "M230" if type == 0 else "M231"
-        cmd += (" " + " ".join(args)).strip()
+        cmd += " " + " ".join(args)
         self.send_command(cmd)
     
     def wait(self, time):

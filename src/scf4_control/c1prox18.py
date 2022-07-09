@@ -5,7 +5,7 @@ from sensor_msgs.msg import CompressedImage
 from scf4_control.msg import Scf4Control, CamControl
 
 from cv_bridge import CvBridgeError
-
+import threading
 from scf4_control.utils import parse_json
 from scf4_control.serial import SerialHandler
 from scf4_control.tracker import MotorTracker
@@ -23,6 +23,9 @@ class C1ProX18:
         self.serial_handler = SerialHandler(config["serial"], config["motors"])
         self.motor_tracker = MotorTracker(self.streamer, self.serial_handler)
 
+        command_thread = threading.Thread(target=self.cmd_thread)
+        command_thread.start()
+
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
@@ -37,6 +40,13 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
+
+    def cmd_thread(self):
+        while True:
+            x = input("Please enter command or enter 'q' to quit:\n")
+            if x == 'q':
+                break
+            self.serial_handler.send_command(x)
 
     
     def _vel_callback_helper(self, twist, motor_type):
@@ -121,7 +131,8 @@ class C1ProX18:
         # Set last twist value
         self.twist_last = twist
 
-        self.motor_tracker.zoom_tracker.set_moving()
+        if steps_a is not None:
+            self.motor_tracker.zoom_tracker.set_moving()
     
     def scf4_callback(self, scf4):
         if scf4.stop:

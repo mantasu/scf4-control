@@ -40,8 +40,10 @@ class MotorTracker:
     
     def adjust_focus(self):
         # Sweep the focus motor until the best position is found and go
-        self.focus_tracker.set_focusing()
+        self.focus_tracker.set_focusing(True)
         self.serial_handler.sweep_once("B", callback=self.focus_pose_callback)
+        self.focus_tracker.set_focusing(False)
+
         self.serial_handler.set_coordinate_mode(0)
         self.serial_handler.move(None, self.focus_pose_best)
         self.serial_handler.await_idle("B")

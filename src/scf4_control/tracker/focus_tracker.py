@@ -66,7 +66,7 @@ class FocusTracker(multiprocessing.Process):
                 # Get frame from capture dev
                 frame = self.streamer.read()
 
-                if not frame:
+                if frame is None:
                     # Send a warning in case the frame is of type None
                     rospy.logwarn("Missed frame while calculating FM.")
                     continue

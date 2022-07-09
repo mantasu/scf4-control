@@ -69,17 +69,18 @@ class SerialHandler(SerialBase):
 
         # Determine where to move based on switch
         status = self.get_status().split(", ")
+        motors = "ABC"[:self.N_MOTORS]
         steps = [
             100 * (-1 if status[3] == "1" else 1),
             100 * (-1 if status[4] == "1" else 1),
             100 * (-1 if status[5] == "1" else 1),
-        ]
+        ][:self.N_MOTORS]
 
         # Move moors towards switch
         self.set_coordinate_mode(1)
         self.set_motor_move_mode(1)
-        self.move(*steps[:self.N_MOTORS])
-        self.await_idle()
+        self.move(*steps)
+        self.await_idle(*motors, initial_status=status)
 
         # Go a bit back from switch
         self.set_motor_move_mode(0)
@@ -88,8 +89,9 @@ class SerialHandler(SerialBase):
 
         # Move till switch reached
         self.set_motor_move_mode(1)
+        status = self.get_status()
         self.move(*[100]*self.N_MOTORS)
-        self.await_idle()
+        self.await_idle(*motors, initial_status=status)
 
         # Set the current coordinate where the switch is as middle
         self.set_counter(*self.retrieve_motors_prop("switch_pos"))
@@ -115,9 +117,50 @@ class SerialHandler(SerialBase):
         """
 
         return [self.config[chr(i+65)][prop] for i in range(self.N_MOTORS)]
+    
+    def is_equal(self, *args, status_group=2, vals="1"):
+        """Checks if any of the motor status is equal to some value
+
+        Reads the motor status which comes in 3 sub-statuses containing
+        3 values (one for each motor). It selects the sub-status and
+        checks if the specified motor(-s) has the same value(-s) as in
+        the sub-status.
+
+        Note: the first sub-status corresponds to motor position, the
+            second to whether the switch is triggered and the third -
+            to whether the motor is moving towards some coordinate.
+
+        Args:
+            status_group (int, optional): The index of the sub-status - 
+                one of `0`, `1`, or `2`. Defaults to 2.
+            vals (str|list, optional): The values to check the motor
+                status against. Defaults to "1".
+
+        Returns:
+            bool: Whether the motor status is equal to the given value
+        """
+        # Init the status
+        is_equal = False
+        start, end = [(0, 3),(3, 6),(6, 9)][status_group]
+        status = self.get_status().split(", ")[start:end]
+
+        if not isinstance(vals, list):
+            # If single value
+            vals = [vals] * 3
+
+        if len(args) == 0:
+            # Check all motors
+            return vals == status
+
+        for val, motor_type in zip(args, vals):
+            # Update with specific motor type
+            status_idx = ord(motor_type) - 65
+            is_equal = is_equal or (status[status_idx] == val)
+        
+        return is_equal
 
     def is_moving(self, *args):
-        """Checks if any of the motors are moving
+        """Checks if any of the motors are moving towards some position
 
         Gets the status for the motors and checks the last 3 values -
         one for every motor. `0` indicates not moving and `1` indicates
@@ -132,22 +175,30 @@ class SerialHandler(SerialBase):
         Returns:
             bool: Whether the motors are currently moving
         """
-        # Init the status
-        is_moving = False
-        status = self.get_status().split(", ")[-3:]
+        return self.is_equal(*args, status_group=2)
+    
+    def is_switched(self, *args, vals="1"):
+        """Checks if any of the motors triggered switch state
 
-        if len(args) == 0:
-            # Check all motors
-            return "1" in status
+        Gets the status for the motors and checks the centre 3 values -
+        one for every motor. `0` indicates not switched and `1`
+        indicates a switch for that motor is triggered. `False` is
+        returned only if the specified motor(-s) or, if not specified,
+        none of the motors, triggered switch.
 
-        for motor_type in args:
-            # Update with specific motor type
-            status_idx = ord(motor_type) - 65
-            is_moving = is_moving or (status[status_idx] == "1")
+        Args:
+            *args: The type of motors to check if their switch status is
+                triggered. For example 'A', 'C'. If nothing provided,
+                all motors are checked
+            vals (str|list, optional): The values to check each motor
+                against. `0` - not switched, `1` - switched
 
-        return is_moving
+        Returns:
+            bool: Whether the motors are currently moving
+        """
+        return self.is_equal(*args, status_group=1, vals=vals)
 
-    def await_idle(self, *args, timeout=5, on_timeout="raise"):
+    def await_idle(self, *args, **kwargs):
         """Halts till motors stop moving
 
         Enters an infinite `while` loop until the controller returns the
@@ -166,12 +217,43 @@ class SerialHandler(SerialBase):
         Raises:
             RuntimeError: If the timeout has been reached
         """
+        # Get keyword arguments or take default vals
+        initial_status = kwargs.pop("initial_status", None)
+        default_status = 2 if initial_status is None else 1
+        status_group = kwargs.pop("status_group", default_status)
+        timeout = kwargs.pop("timeout", 10)
+        on_timeout = kwargs.pop("on_timeout", "raise")
+        sleep_time = kwargs.pop("sleep_time", 0.1)
+
+        if initial_status is not None:
+            # A function that maps initial val to target val
+            to_val = lambda x: '1' if str(x) == '0' else '1'
+
+            if isinstance(initial_status, str) and ", " in initial_status:
+                # Convert to array of strings if full status
+                initial_status = initial_status.split(", ")
+            
+            if isinstance(initial_status, list):
+                if len(initial_status) > 3:
+                    # Extract the specific sub-status which interests us
+                    start, end = [(0, 3), (3, 6), (6, 9)][status_group]
+                    initial_status = initial_status[start:end]
+                
+                # Apply the mapping function to get vals
+                vals = list(map(to_val, initial_status))
+            else:
+                # If just a single value given
+                vals = to_val(initial_status)
+        else:
+            # Otherwise
+            vals = "1"
+
         # Check the rospy start time
         start_time = rospy.get_time()
 
         while True:
-            if not self.is_moving(*args):
-                # If motors have stopped
+            if self.is_equal(*args, status_group=status_group, vals=vals):
+                # If the target condition is met, terminate the waiting
                 break
             
             if rospy.get_time() - start_time > timeout:
@@ -183,8 +265,8 @@ class SerialHandler(SerialBase):
                     rospy.logerr("Waited too long for motors to stop")
                     break
             
-            # Sleep 0.3 sec
-            rospy.sleep(.3)
+            # Sleep for given time
+            rospy.sleep(sleep_time)
 
     def get_motor_position(self, *args, return_single_in_list=False):
         """Gets the motor position(-s)
