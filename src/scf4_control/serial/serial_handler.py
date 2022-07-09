@@ -76,32 +76,44 @@ class SerialHandler(SerialBase):
             100 * (-1 if status[5] == "1" else 1),
         ][:self.N_MOTORS]
 
+        print("Moving to middle")
         # Move moors towards switch
         self.set_coordinate_mode(1)
         self.set_motor_move_mode(1)
         self.move(*steps)
+        start_time = rospy.get_time()
         self.await_idle(*motors, initial_status=status)
+        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
+        print("Moving slightly back")
         # Go a bit back from switch
         self.set_motor_move_mode(0)
         self.move(*[-200]*self.N_MOTORS)
+        start_time = rospy.get_time()
         self.await_idle()
+        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
+        print("Moving till switch triggers")
         # Move till switch reached
         self.set_motor_move_mode(1)
         status = self.get_status()
         self.move(*[100]*self.N_MOTORS)
+        start_time = rospy.get_time()
         self.await_idle(*motors, initial_status=status)
+        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
         # Set the current coordinate where the switch is as middle
         self.set_counter(*self.retrieve_motors_prop("switch_pos"))
         self.set_motor_move_mode(0)
         self.set_coordinate_mode(0)
 
+        print("Mid coord set, moving back")
         # Move zoom all the way back to see all
         self.move(self.config["A"]["count_max"])
+        start_time = rospy.get_time()
         self.await_idle()
         self.set_coordinate_mode(1)
+        print("Arrived, elapsed:", rospy.get_time() - start_time)
     
     def retrieve_motors_prop(self, prop):
         """Retrieves a config property for every motor
@@ -118,7 +130,7 @@ class SerialHandler(SerialBase):
 
         return [self.config[chr(i+65)][prop] for i in range(self.N_MOTORS)]
     
-    def is_equal(self, *args, status_group=2, vals="1"):
+    def is_equal(self, *args, status_group=2, vals="0"):
         """Checks if any of the motor status is equal to some value
 
         Reads the motor status which comes in 3 sub-statuses containing
@@ -134,7 +146,7 @@ class SerialHandler(SerialBase):
             status_group (int, optional): The index of the sub-status - 
                 one of `0`, `1`, or `2`. Defaults to 2.
             vals (str|list, optional): The values to check the motor
-                status against. Defaults to "1".
+                status against. Defaults to "0".
 
         Returns:
             bool: Whether the motor status is equal to the given value
@@ -152,10 +164,10 @@ class SerialHandler(SerialBase):
             # Check all motors
             return vals == status
 
-        for val, motor_type in zip(args, vals):
+        for motor_type, val in zip(args, vals):
             # Update with specific motor type
             status_idx = ord(motor_type) - 65
-            is_equal = is_equal or (status[status_idx] == val)
+            is_equal = is_equal and (status[status_idx] == val)
         
         return is_equal
 
@@ -202,17 +214,43 @@ class SerialHandler(SerialBase):
         """Halts till motors stop moving
 
         Enters an infinite `while` loop until the controller returns the
-        motor status as "not moving" (for the specified motor(-s) or, if
-        not specified, for every motor).
+        motor status as "matches the target status" (for the specified
+        motor(-s) or, if not specified, for every motor). If no initial
+        status is provided, it assumes the target status is `0` for
+        status group `2`, i.e., not going towards some goal. Otherwise,
+        if initial_status is provided, it assumes the target status is
+        the opposite of the given status for every specified motor (or
+        for all, if motors are not specified) for the status group `1`,
+        i.e., the switch is (not) triggered.
 
         Args:
             *args: The type of motors to check if they're moving. For
                 example 'A', 'C'. If nothing provided, all motors are
                 checked
-            timeout (int, optional): The time to wait (in seconds)
-                before forcefully stopping to wait. Defaults to 5.
-            on_timeout (str, optional): The action to do if a timeout
-                occurs - raise error or just log. Defaults to "raise".
+            **kwargs: The additional keyword arguments specifying how to
+                wait for the idle status. The parameters are as follows:
+                    * initial_status (str|list|int, optional): The
+                        initial status of the motor(-s) of interest. Can
+                        be the whole status message, the same message
+                        but chopped to substrings, the specific values
+                        (str|int) for the motor(-s) identifying their
+                        status (either standalone or in list). If a
+                        single value is given but more motors are
+                        provided, same value is applied to all of them.
+                        Defaults to None.
+                    * status_group (int, optional): The index of the
+                        sub-status - one of `0`, `1`, or `2`. Defaults
+                        to 2.
+                    * timeout (int, optional): The time to wait (in
+                        seconds) before forcefully stopping to wait.
+                        Defaults to 10.
+                    * on_timeout (str, optional): The action to do if a
+                        timeout occurs - raise error or just log. One of
+                        "raise"|"log". Defaults to "raise".
+                    * sleep_time (float, optional): The time (in
+                        seconds) to wait before each call of the status
+                        that is used to check if the goal is reached.
+                        Defaults to 0.1.
 
         Raises:
             RuntimeError: If the timeout has been reached
@@ -227,7 +265,7 @@ class SerialHandler(SerialBase):
 
         if initial_status is not None:
             # A function that maps initial val to target val
-            to_val = lambda x: '1' if str(x) == '0' else '1'
+            to_val = lambda x: '1' if str(x) == '0' else '0'
 
             if isinstance(initial_status, str) and ", " in initial_status:
                 # Convert to array of strings if full status
@@ -246,7 +284,7 @@ class SerialHandler(SerialBase):
                 vals = to_val(initial_status)
         else:
             # Otherwise
-            vals = "1"
+            vals = "0"
 
         # Check the rospy start time
         start_time = rospy.get_time()
@@ -294,28 +332,36 @@ class SerialHandler(SerialBase):
         return positions
     
     def sweep_once(self, motor, forth=True, reach_start=True, callback=None):
+        # Get minimum and maximum position counts
         pos_min = self.config[motor]["count_min"]
         pos_max = self.config[motor]["count_max"]
 
+        # Coordinate mode absolute
         self.set_coordinate_mode(0)
 
         if not forth:
+            # Just swap the min and max values
             pos_min, pos_max = pos_max, pos_min
 
         if reach_start:
+            # If the start of the position must be reached before sweep
             move_cmd = [pos_min if m == motor else None for m in "ABC"]
             self.move(*move_cmd)
             self.await_idle(motor)
         
+        # Generate the moving command for the specified motor type
         move_cmd = [pos_max if m == motor else None for m in "ABC"]
         self.move(*move_cmd)
 
         while True:
             if not self.is_moving(motor):
+                # If moving has stopped
                 break
             
             if callback is not None:
+                # If something needs to be done during 
                 callback(self.get_motor_position(motor))
         
+        # Coordinate mode relative
         self.set_coordinate_mode(1)
             
