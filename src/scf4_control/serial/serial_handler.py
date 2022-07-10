@@ -130,7 +130,7 @@ class SerialHandler(SerialBase):
 
         return [self.config[chr(i+65)][prop] for i in range(self.N_MOTORS)]
     
-    def is_equal(self, *args, status_group=2, vals="0"):
+    def is_equal(self, *args, status_group=2, vals="1"):
         """Checks if any of the motor status is equal to some value
 
         Reads the motor status which comes in 3 sub-statuses containing
@@ -152,7 +152,7 @@ class SerialHandler(SerialBase):
             bool: Whether the motor status is equal to the given value
         """
         # Init the status
-        is_equal = False
+        is_equal = True
         start, end = [(0, 3),(3, 6),(6, 9)][status_group]
         status = self.get_status().split(", ")[start:end]
 
@@ -187,7 +187,7 @@ class SerialHandler(SerialBase):
         Returns:
             bool: Whether the motors are currently moving
         """
-        return self.is_equal(*args, status_group=2)
+        return self.is_equal(*args, status_group=2, vals="1")
     
     def is_switched(self, *args, vals="1"):
         """Checks if any of the motors triggered switch state
