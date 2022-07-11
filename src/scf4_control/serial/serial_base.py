@@ -1,12 +1,16 @@
 import rospy
 import serial
 
+from scf4_control.utils import clamp
+
 class SerialBase():
     def __init__(self, serial_config, motors_config):
         # Merge both configs and initialize serial object
         self.config = {**serial_config, **motors_config}
         self.N_MOTORS = sum([key in "ABC" for key in motors_config.keys()])
         self.serial = None
+        self.coordinate_mode = 1
+        self.motor_move_mode = 0
     
     def _verify_steps(self, steps, motor_type):
         """Verifies the motor steps
@@ -21,19 +25,16 @@ class SerialBase():
         Returns:
             str: A suitable steps value for motors
         """
-        # Convert steps to an integer value (parse string if needed)
-        steps = int(steps) if isinstance(steps, str) else int(steps)
+        # Float/str to int
+        steps = int(steps)
 
-        if steps == 0:
-            # No step
-            return ""
+        # Get the type of range for min and max values and clamp
+        range_type = "steps" if self.coordinate_mode else "count"
+        min_val = self.config[motor_type][f"{range_type}_min"]
+        max_val = self.config[motor_type][f"{range_type}_max"]
+        clamped = clamp(steps, min_val, max_val, self.coordinate_mode)
 
-        # Get the sign and clamp steps
-        sign = 1 if steps > 0 else -1
-        steps = min(abs(steps), self.config[motor_type]["steps_max"]) * sign
-        steps = max(abs(steps), self.config[motor_type]["steps_min"]) * sign
-
-        return motor_type + str(steps)
+        return motor_type + str(clamped)
     
     def _verify_speed(self, speed, motor_type):
         """Verifies the motor speed
@@ -48,8 +49,8 @@ class SerialBase():
         Returns:
             str: A suitable speed value for motors
         """
-        # Convert speed to an integer value (parse string if needed)
-        speed = int(speed) if isinstance(speed, str) else int(speed)
+        # Float/str to int
+        speed = int(speed)
 
         if speed < 0:
             # Nothing
@@ -74,8 +75,8 @@ class SerialBase():
         Returns:
             str: A suitable counter value for motors
         """
-        # Convert count to an integer value (parse string if needed)
-        count = int(count) if isinstance(count, str) else int(count)
+        # Float/str to int
+        count = int(count)
 
         if count < 0:
             # Nothing
@@ -332,6 +333,9 @@ class SerialBase():
             type (int): The type of coordinate mode: `0` (absolute) or
                 `1` (relative)
         """
+        # Mode to absolute/relative
+        self.motor_move_mode = type
+
         # Generate G-code cmd and send it
         cmd = "G90" if type == 0 else "G91"
         self.send_command(cmd)
@@ -355,6 +359,9 @@ class SerialBase():
             *args: Additional values of type str specifying motors to
                 target, e.g., "A". If none, all are targeted
         """
+        # Set mode to normal/forced
+        self.motor_move_mode = type
+        
         if len(args) == 0:
             # By default
             args = "ABC"

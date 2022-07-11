@@ -109,7 +109,7 @@ class SerialHandler(SerialBase):
 
         print("Mid coord set, moving back")
         # Move zoom all the way back to see all
-        self.move(self.config["A"]["count_max"])
+        self.move(self.config["A"]["count_min"])
         start_time = rospy.get_time()
         self.await_idle()
         self.set_coordinate_mode(1)
@@ -155,6 +155,9 @@ class SerialHandler(SerialBase):
         is_equal = True
         start, end = [(0, 3),(3, 6),(6, 9)][status_group]
         status = self.get_status().split(", ")[start:end]
+
+        if len(status) != 3:
+            raise RuntimeError("Please don't spam the command too often")
 
         if not isinstance(vals, list):
             # If single value

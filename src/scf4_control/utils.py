@@ -112,3 +112,10 @@ def get_str_datetime(format="%d-%m-%Y_%H.%M.%S"):
     str_now = now.strftime(format)
 
     return str_now
+
+def clamp(val, min_val, max_val, inv_range=False):
+    if inv_range and (val < 0 < min_val or val > 0 > max_val):
+        # If inverse range is included, swap
+        min_val, max_val = -max_val, -min_val
+    
+    return min(max(val, min_val), max_val)

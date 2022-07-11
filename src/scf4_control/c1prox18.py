@@ -1,4 +1,5 @@
 import rospy
+import threading
 
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
@@ -23,6 +24,9 @@ class C1ProX18:
         self.serial = SerialHandler(config["serial"], config["motors"])
         self.focuser = Focuser(self.streamer, self.serial)
 
+        manual_thread = threading.Thread(target=self.manual)
+        # manual_thread.start()
+
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
@@ -37,6 +41,15 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
+    
+    def manual_thread(self):
+        while True:
+            x = input("Enter G-code or enter 'q' to exit manual thread\n")
+            if x == 'q':
+                print("Exiting manual thread")
+                break
+            else:
+                self.serial.send_command(x)
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -113,14 +126,19 @@ class C1ProX18:
         speed_a, steps_a = self._vel_callback_helper(twist, "A")
         speed_b, steps_b = self._vel_callback_helper(twist, "B")
 
+        try:
+            steps_a = None if self.serial.is_moving('A') else steps_a
+            steps_b = None if self.serial.is_moving('B') else steps_b
+        except RuntimeError:
+            rospy.logwarn("Please, run the commands slower")
+            return
+
         # Send all the values to the controller
         self.serial.set_speed(speed_a, speed_b)
         self.serial.move(steps_a, steps_b)
 
-        # Set last twist value
-        self.twist_last = twist
-
         if steps_a is not None:
+            # Start focus thread
             self.focuser.start()
     
     def scf4_callback(self, scf4):

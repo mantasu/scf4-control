@@ -3,7 +3,7 @@ import rospy
 import threading
 
 class Focuser():
-    def __init__(self, streamer, serial):
+    def __init__(self, streamer, serial, sleep_time=0.1):
         super().__init__()
 
         # Init streamer & serial
@@ -22,6 +22,9 @@ class Focuser():
         # Extra variables for updates
         self._focus_sweep_set = False
         self._idle_start_time = None
+        self.sleep_time = sleep_time
+        self.thread = None
+        self.roi = None
     
     def _at_pos(self, motor='B', pos="min"):
         if pos in ["min", "max"]:
@@ -35,7 +38,7 @@ class Focuser():
     
     def _wait_zoom(self):
         if self._event_moved.is_set():
-            if self.serial.is_moving("A"):
+            if self.serial.is_moving('A'):
                 # If still moving, just wait
                 rospy.sleep(self.sleep_time)
             else:
