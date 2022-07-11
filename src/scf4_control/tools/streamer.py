@@ -53,8 +53,8 @@ class Streamer():
 
     def start(self) :
         if self.started :
-            # If already started, log a warning message
-            rospy.logwarn("Streaming already started")
+            # If thread already started, log a warning message
+            rospy.logwarn("Streaming thread already started")
             return None
         
         # Begin the thread
@@ -63,33 +63,44 @@ class Streamer():
         self.thread.start()
 
         return self
+    
+    def update_once(self):
+        # Read the current frame from capturer
+        grabbed, frame = self.capturer.read()
 
-    def update(self):
-        while self.started:
-            # Read the current frame from capturer
-            grabbed, frame = self.capturer.read() 
-            
+        if self.started:
             # Safely acquire a frame
             self.read_lock.acquire()
             self.grabbed, self.frame = grabbed, frame
             self.read_lock.release()
+        else:
+            # Just a normal update if not threaded run
+            self.grabbed, self.frame = grabbed, frame
+        
+        if not grabbed:
+            # If no response received, log a warning message
+            rospy.logwarn("Could not capture camera frame.") 
+        elif self.recorder.is_recording:
+            # Use the recorder to write the frame
+            self.recorder.write_video(self.frame)
+        else:
+            # Release the recorder
+            self.recorder.release()
 
-            if not grabbed:
-                # If no response received, log a warning message
-                rospy.logwarn("Could not capture camera frame.") 
-                continue
-
-            if self.recorder.is_recording:
-                # Use a recorder to write the current frame
-                self.recorder.write_video(self.frame)
-            else:
-                self.recorder.release()
+    def update(self):
+        while self.started:
+            # Update each time
+            self.update_once()
 
     def read(self, return_msg=False):
-        # Safely acquire a frame
-        self.read_lock.acquire()
-        frame = self.frame.copy()
-        self.read_lock.release()
+        if self.started:
+            # Safely acquire a frame
+            self.read_lock.acquire()
+            frame = self.frame.copy()
+            self.read_lock.release()
+        else:
+            # If thread is not running
+            frame = self.frame.copy()
 
         if return_msg:
             # Also compute a compressed frame message for the ROS nodes
@@ -109,9 +120,10 @@ class Streamer():
         self.recorder.end_recording()
 
     def stop(self) :
-        # Wait to terminate
-        self.started = False
-        self.thread.join()
+        if self.started:
+            # Wait to terminate
+            self.started = False
+            self.thread.join()
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Release the resources

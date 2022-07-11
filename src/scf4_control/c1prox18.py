@@ -5,10 +5,10 @@ from sensor_msgs.msg import CompressedImage
 from scf4_control.msg import Scf4Control, CamControl
 
 from cv_bridge import CvBridgeError
-import threading
+
 from scf4_control.utils import parse_json
 from scf4_control.serial import SerialHandler
-from scf4_control.tracker import MotorTracker
+from scf4_control.tracker import Focuser
 from scf4_control.tools import Streamer
 
 class C1ProX18:
@@ -19,12 +19,9 @@ class C1ProX18:
         # Last speed vals to check changes
         self.speed_last = {"A": 0, "B": 0}
 
-        self.streamer = Streamer(config["capturer"], config["recorder"]).start()
-        self.serial_handler = SerialHandler(config["serial"], config["motors"])
-        self.motor_tracker = MotorTracker(self.streamer, self.serial_handler)
-
-        command_thread = threading.Thread(target=self.cmd_thread)
-        command_thread.start()
+        self.streamer = Streamer(config["capturer"], config["recorder"])
+        self.serial = SerialHandler(config["serial"], config["motors"])
+        self.focuser = Focuser(self.streamer, self.serial)
 
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
@@ -40,14 +37,6 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
-
-    def cmd_thread(self):
-        while True:
-            x = input("Please enter command or enter 'q' to quit:\n")
-            if x == 'q':
-                break
-            self.serial_handler.send_command(x)
-
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -85,8 +74,8 @@ class C1ProX18:
         speed = None
         steps = None
 
-        # Select the configuration for the right motor 
-        motor = self.serial_handler.config[motor_type]
+        # Select the configuration for the motor 
+        motor = self.serial.config[motor_type]
 
         # Get last and current speed values 
         vel_last = self.speed_last[motor_type]
@@ -124,43 +113,43 @@ class C1ProX18:
         speed_a, steps_a = self._vel_callback_helper(twist, "A")
         speed_b, steps_b = self._vel_callback_helper(twist, "B")
 
-        # Send the values to the controller to execute cmd
-        self.serial_handler.set_speed(speed_a, speed_b)
-        self.serial_handler.move(steps_a, steps_b)
+        # Send all the values to the controller
+        self.serial.set_speed(speed_a, speed_b)
+        self.serial.move(steps_a, steps_b)
 
         # Set last twist value
         self.twist_last = twist
 
         if steps_a is not None:
-            self.motor_tracker.zoom_tracker.set_moving()
+            self.focuser.start()
     
     def scf4_callback(self, scf4):
         if scf4.stop:
-            self.serial_handler.stop()
+            self.serial.stop()
         
         if scf4.filter_position >= 0:
-            self.serial_handler.set_filter_position(scf4.filter_position)
+            self.serial.set_filter_position(scf4.filter_position)
         
         if scf4.coordinate_mode >= 0:
-            self.serial_handler.set_coordinate_mode(scf4.coordinate_mode)
+            self.serial.set_coordinate_mode(scf4.coordinate_mode)
         
         if scf4.motor_move_mode >= 0:
-            self.serial_handler.set_motor_move_mode(scf4.motor_move_mode)
+            self.serial.set_motor_move_mode(scf4.motor_move_mode)
         
         if len(scf4.steps) > 0:
-            self.serial_handler.move(*scf4.steps)
+            self.serial.move(*scf4.steps)
         
         if len(scf4.speed) > 0:
-            self.serial_handler.set_speed(*scf4.speed)
+            self.serial.set_speed(*scf4.speed)
 
         if len(scf4.count) > 0:
-            self.serial_handler.set_counter(*scf4.count)
+            self.serial.set_counter(*scf4.count)
 
         if scf4.command != "":
-            self.serial_handler.send_command(scf4.command)
+            self.serial.send_command(scf4.command)
         
         if scf4.wait > 0:
-            self.serial_handler.wait(scf4.wait)
+            self.serial.wait(scf4.wait)
 
     def cam_callback(self, cam_msg):
         if cam_msg.start_record:
@@ -172,6 +161,9 @@ class C1ProX18:
             self.streamer.end_recording()
 
     def publish(self):
+        # Read from capture device
+        self.streamer.update_once()
+
         # Get a camera frame converted to a compressed image message
         _, frame_compressed_msg = self.streamer.read(return_msg=True)
         
@@ -183,5 +175,5 @@ class C1ProX18:
             rospy.logerr(e)
     
     def release(self):
-        self.motor_tracker.release()
-        self.streamer.stop()
+        # Stop the thread
+        self.focuser.stop()
