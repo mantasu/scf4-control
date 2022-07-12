@@ -109,7 +109,7 @@ class SerialHandler(SerialBase):
 
         print("Mid coord set, moving back")
         # Move zoom all the way back to see all
-        self.move(self.config["A"]["count_min"])
+        self.move(self.config["A"]["count_max"])
         start_time = rospy.get_time()
         self.await_idle()
         self.set_coordinate_mode(1)

@@ -42,14 +42,15 @@ class C1ProX18:
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
     
-    def manual_thread(self):
+    def manual(self):
         while True:
             x = input("Enter G-code or enter 'q' to exit manual thread\n")
             if x == 'q':
                 print("Exiting manual thread")
                 break
             else:
-                self.serial.send_command(x)
+                r = self.serial.send_command(x)
+                print(r)
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values

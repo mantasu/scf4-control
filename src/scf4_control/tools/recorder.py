@@ -56,7 +56,7 @@ class Recorder():
     
     def write_video(self, frame):
         if self.writer_duration is not None and self.writer_duration != 0 and \
-           (rospy.get_time() - self.start_time).secs > self.writer_duration:
+           rospy.get_time() - self.start_time > self.writer_duration:
             # If duration reached
             self.end_recording()
         else:

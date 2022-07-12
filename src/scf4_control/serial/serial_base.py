@@ -1,5 +1,6 @@
 import rospy
 import serial
+import threading
 
 from scf4_control.utils import clamp
 
@@ -11,6 +12,7 @@ class SerialBase():
         self.serial = None
         self.coordinate_mode = 1
         self.motor_move_mode = 0
+        self.read_lock = threading.Lock()
     
     def _verify_steps(self, steps, motor_type):
         """Verifies the motor steps
@@ -49,6 +51,9 @@ class SerialBase():
         Returns:
             str: A suitable speed value for motors
         """
+        if isinstance(speed, str) and speed in ["min", "max", "def"]:
+            speed = self.config[motor_type][f"speed_{speed}"]
+
         # Float/str to int
         speed = int(speed)
 
@@ -86,7 +91,7 @@ class SerialBase():
         count = min(count, self.config[motor_type]["count_max"])
         count = max(count, self.config[motor_type]["count_min"])
 
-        return str(count)
+        return motor_type + str(count)
 
     def _generate_motor_cmd(self, callback, args, cmd=""):
         """Generates a motor control command given motor values.
@@ -193,12 +198,18 @@ class SerialBase():
         """
         #print(f">> {command}")
         try:
+            # Acquire the lock first
+            self.read_lock.acquire()
+
             # Send the G-code command and get the response
             self.serial.write(bytes(command + "\r\n", "utf8"))
             response = self.serial.readline().decode("utf-8").strip()
         except AttributeError:
             # If the connection hasn't been established
             rospy.logerr("Connect to the port first!")
+        finally:
+            # Assure always released
+            self.read_lock.release()
         #print(f"<< {response}")
         return response
     
@@ -334,7 +345,7 @@ class SerialBase():
                 `1` (relative)
         """
         # Mode to absolute/relative
-        self.motor_move_mode = type
+        self.coordinate_mode = type
 
         # Generate G-code cmd and send it
         cmd = "G90" if type == 0 else "G91"

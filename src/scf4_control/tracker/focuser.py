@@ -25,6 +25,9 @@ class Focuser():
         self.sleep_time = sleep_time
         self.thread = None
         self.roi = None
+
+        self.fms = []
+        self.pos = []
     
     def _at_pos(self, motor='B', pos="min"):
         if pos in ["min", "max"]:
@@ -86,11 +89,16 @@ class Focuser():
             elif self._at_pos(pos="min") and not self._focus_sweep_set:
                 # Start moving focus motor from min pos to max
                 pos_max = self.serial.config['B']["count_max"]
+                speed_max = self.serial.config['B']["speed_max"]
+                
+                self.serial.set_speed(None, speed_max)
                 self.serial.move(None, pos_max)
+
                 self._focus_sweep_set = True
             elif self._at_pos(pos="max") and self._focus_sweep_set:
                 # Clear the focus event
                 self._event_focus.clear()
+                self._focus_sweep_set = False
             else:
                 # Start moving focus motor from curr pos to min
                 pos_min = self.serial.config['B']["count_min"]
