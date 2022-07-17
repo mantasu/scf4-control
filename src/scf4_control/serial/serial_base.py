@@ -27,11 +27,16 @@ class SerialBase():
         Returns:
             str: A suitable steps value for motors
         """
+        range_type = "steps" if self.coordinate_mode else "count"
+
+        if isinstance(steps, str) and steps in ["min", "max", "jog"]:
+            steps = self.config[motor_type][f"{range_type}_{steps}"]
+            return motor_type + str(steps)
+        
         # Float/str to int
         steps = int(steps)
 
         # Get the type of range for min and max values and clamp
-        range_type = "steps" if self.coordinate_mode else "count"
         min_val = self.config[motor_type][f"{range_type}_min"]
         max_val = self.config[motor_type][f"{range_type}_max"]
         clamped = clamp(steps, min_val, max_val, self.coordinate_mode)
@@ -53,6 +58,7 @@ class SerialBase():
         """
         if isinstance(speed, str) and speed in ["min", "max", "def"]:
             speed = self.config[motor_type][f"speed_{speed}"]
+            return motor_type + str(speed)
 
         # Float/str to int
         speed = int(speed)
@@ -273,6 +279,8 @@ class SerialBase():
                 can be of type str|int|float or `None` if the motor
                 should be ignored.
         """
+        # TODO: kwargs for a/b/c, maybe single verify function
+
         # Generate G-code cmd by assigning values to motors and send it
         cmd = self._generate_motor_cmd(self._verify_steps, args, "G0")
         self.send_command(cmd)

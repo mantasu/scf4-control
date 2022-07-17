@@ -1,6 +1,7 @@
 import cv2
 import rospy
 import threading
+import numpy as np
 
 class Focuser():
     def __init__(self, streamer, serial, sleep_time=0.1):
@@ -39,6 +40,22 @@ class Focuser():
 
         return self.serial.is_equal(motor, status_group=0, vals=pos)
     
+    def _update_pos(self):
+        fp = self.serial.get_motor_position('B')
+        self.pos.append(fp)
+
+    def _update_fms(self):
+        # Get frame from capture dev
+        frame = self.streamer.read()
+
+        if frame is None:
+            # Send a warning in case the frame not existing
+            rospy.logwarn("Missed frame while calculating FM.")
+        else:
+            # Get focal measure and append
+            fm, _ = self.eval_focus(frame)
+            self.fms.append(fm)
+    
     def _wait_zoom(self):
         if self._event_moved.is_set():
             if self.serial.is_moving('A'):
@@ -68,41 +85,44 @@ class Focuser():
         if self._event_focus.is_set():
             if self.serial.is_moving('B'):
                 if self._focus_sweep_set:
-                    # Get frame from capture dev
-                    frame = self.streamer.read()
+                    self._update_pos()
+                    
+                    time_delayed = rospy.get_time() - self.focus_timestamp
 
-                    if frame is None:
-                        # Send a warning in case the frame not existing
-                        rospy.logwarn("Missed frame while calculating FM.")
-                    else:
-                        # Get motor's position and focal measure
-                        fp = self.serial.get_motor_position('B')
-                        fm, _ = self.eval_focus(frame)
-
-                        if self.fm_best is None or fm > self.fm_best:
-                            # Update the best
-                            self.fm_best = fm
-                            self.fp_best = fp
+                    if time_delayed >= self.streamer.capturer.delay:
+                        self._update_fms()
+                    
+                    self.streamer.sleep()
                 else:
                     # Wait for the sweep min_pos
                     rospy.sleep(self.sleep_time)
             elif self._at_pos(pos="min") and not self._focus_sweep_set:
-                # Start moving focus motor from min pos to max
-                pos_max = self.serial.config['B']["count_max"]
-                speed_max = self.serial.config['B']["speed_max"]
-                
-                self.serial.set_speed(None, speed_max)
-                self.serial.move(None, pos_max)
-
+                # Start moving focus motor from min pos to max                
+                self.serial.set_speed(None, "max")
+                self.serial.move(None, "max")
                 self._focus_sweep_set = True
             elif self._at_pos(pos="max") and self._focus_sweep_set:
-                # Clear the focus event
-                self._event_focus.clear()
-                self._focus_sweep_set = False
+                if len(self.pos) > len(self.fms):
+                    self._update_fms()
+                    self.streamer.sleep()
+                else:
+                    for fm, fp in zip(self.fms, self.pos):
+                        print(f"FP: {fp}\tFM: {fm}")
+
+                    pos_idx = np.argmax(self.fms)
+                    self.fp_best = self.pos[pos_idx]
+
+                    self.fms.clear()
+                    self.pos.clear()
+
+                    # Clear the focus event
+                    self._event_focus.clear()
+                    self._focus_sweep_set = False
             else:
+                print("Current pos:", self.serial.get_motor_position('B'))
+                print("Current FM:", self.eval_focus(self.streamer.read())[0])
                 # Start moving focus motor from curr pos to min
-                pos_min = self.serial.config['B']["count_min"]
-                self.serial.move(None, pos_min)
+                self.serial.move(None, "min")
     
     def _wait_adjust(self):
         if not (self._event_moved.is_set() or self._event_focus.is_set()):

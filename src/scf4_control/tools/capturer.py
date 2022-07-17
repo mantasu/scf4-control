@@ -33,6 +33,7 @@ class Capturer():
         self.width = width
         self.height = height
         self.fourcc = fourcc
+        self.delay = config["delay"]
     
     def _get_backend(self, desired_backend):
         if desired_backend < 0:

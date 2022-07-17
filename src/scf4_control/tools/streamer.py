@@ -118,6 +118,10 @@ class Streamer():
     def end_recording(self):
         # End the recording forcefully
         self.recorder.end_recording()
+    
+    def sleep(self):
+        sleep_time = 1 / self.capturer.fps
+        rospy.sleep(sleep_time)
 
     def stop(self) :
         if self.started:
