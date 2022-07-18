@@ -17,12 +17,17 @@ class Focuser():
 
         # Init the events to monitor updates
         self._event_stop = threading.Event()
-        self._event_moved = threading.Event()
-        self._event_focus = threading.Event()
+        self._event_wait = threading.Event()
+        self._event_eval = threading.Event()
+        self._event_move = threading.Event()
 
         # Extra variables for updates
         self._focus_sweep_set = False
-        self._idle_start_time = None
+
+        self._wait_start_time = None
+        self._eval_start_time = None
+
+
         self.sleep_time = sleep_time
         self.thread = None
         self.roi = None
@@ -30,9 +35,21 @@ class Focuser():
         self.fms = []
         self.pos = []
     
+    def _time_met(self, event_type="wait"):
+        if event_type == "wait":
+            # Wait event start time & duration
+            start_time = self._wait_start_time
+            dur = self.serial.config["min_idle_time"]
+        elif event_type == "eval":
+            # Eval event start time & duration
+            start_time = self._eval_start_time
+            dur = self.streamer.capturer.delay
+
+        return start_time is not None and rospy.get_time() - start_time >= dur
+    
     def _at_pos(self, motor='B', pos="min"):
         if pos in ["min", "max"]:
-            # If the position is one of minimum or maximum counter
+            # If motor position counter is one of [min|max]
             pos = self.serial.config[motor][f"count_{pos}"]
         
         # Num to string
@@ -41,6 +58,7 @@ class Focuser():
         return self.serial.is_equal(motor, status_group=0, vals=pos)
     
     def _update_pos(self):
+        # Get focus motor position & add to list
         fp = self.serial.get_motor_position('B')
         self.pos.append(fp)
 
@@ -49,80 +67,77 @@ class Focuser():
         frame = self.streamer.read()
 
         if frame is None:
-            # Send a warning in case the frame not existing
+            # Send a warning in case the frame is not existing
             rospy.logwarn("Missed frame while calculating FM.")
         else:
             # Get focal measure and append
             fm, _ = self.eval_focus(frame)
             self.fms.append(fm)
     
-    def _wait_zoom(self):
-        if self._event_moved.is_set():
-            if self.serial.is_moving('A'):
-                # If still moving, just wait
-                rospy.sleep(self.sleep_time)
-            else:
-                # Set non-moving and time
-                self._event_moved.clear()
-                self._idle_start_time = rospy.get_time()
+    def _execute_wait(self):
+        """Executes waiting event
+
+        Once the `wait event` is set, it waits for the zoom motor to
+        stop moving. Once it stops, a countdown starts for the minimum
+        duration the zoom motor should not move. If it does not move for
+        the specified time, the `eval event` is set and this method
+        always just returns until the `wait event` is triggered again.
+        """
+        if not self._event_wait.is_set():
+            return
+        elif self._wait_start_time is None and not self.serial.is_moving('A'):
+            # Set countdown for min static zoom time
+            self._wait_start_time = rospy.get_time()
+        elif self._time_met(event_type="wait"):
+            # Start eval/stop wait
+            self._event_eval.set()
+            self._event_wait.clear()
+            self._wait_start_time = None
+            rospy.loginfo("Zoom motor stopped. Focus motor started.")
         else:
-            if self._idle_start_time is None:
-                return
+            # If still moving, just wait
+            rospy.sleep(self.sleep_time)
+
+    def _execute_eval(self):
+        if not self._event_eval.is_set():
+            return
+        if self._eval_start_time is not None and self.serial.is_moving('B'):
+            # Update focus pos
+            self._update_pos()
             
-            # Calculate the total duration zoom motor has been idle
-            idle_elapsed = rospy.get_time() - self._idle_start_time
-
-            if idle_elapsed >= self.serial.config["min_idle_time"]:
-                # Set focusing from now
-                self._event_focus.set()
-                self._idle_start_time = None
-                rospy.loginfo("Zoom motor stopped. Focus motor started.")
+            if self._time_met(event_type="eval"):
+                # Calculate the FM
+                self._update_fms()
+        elif self._at_pos(pos="min") and not self._focus_sweep_set:
+            # Start moving focus motor from min pos to max                
+            self.serial.set_speed(None, "max")
+            self.serial.move(None, "max")
+            self._focus_sweep_set = True
+        elif self._at_pos(pos="max") and self._focus_sweep_set:
+            if len(self.pos) > len(self.fms):
+                self._update_fms()
+                self.streamer.sleep()
             else:
-                # If min idle time not reached
-                rospy.sleep(self.sleep_time)
+                for fm, fp in zip(self.fms, self.pos):
+                    print(f"FP: {fp}\tFM: {fm}")
 
-    def _wait_focus(self):
-        if self._event_focus.is_set():
-            if self.serial.is_moving('B'):
-                if self._focus_sweep_set:
-                    self._update_pos()
-                    
-                    time_delayed = rospy.get_time() - self.focus_timestamp
+                pos_idx = np.argmax(self.fms)
+                self.fp_best = self.pos[pos_idx]
 
-                    if time_delayed >= self.streamer.capturer.delay:
-                        self._update_fms()
-                    
-                    self.streamer.sleep()
-                else:
-                    # Wait for the sweep min_pos
-                    rospy.sleep(self.sleep_time)
-            elif self._at_pos(pos="min") and not self._focus_sweep_set:
-                # Start moving focus motor from min pos to max                
-                self.serial.set_speed(None, "max")
-                self.serial.move(None, "max")
-                self._focus_sweep_set = True
-            elif self._at_pos(pos="max") and self._focus_sweep_set:
-                if len(self.pos) > len(self.fms):
-                    self._update_fms()
-                    self.streamer.sleep()
-                else:
-                    for fm, fp in zip(self.fms, self.pos):
-                        print(f"FP: {fp}\tFM: {fm}")
+                self.fms.clear()
+                self.pos.clear()
 
-                    pos_idx = np.argmax(self.fms)
-                    self.fp_best = self.pos[pos_idx]
-
-                    self.fms.clear()
-                    self.pos.clear()
-
-                    # Clear the focus event
-                    self._event_focus.clear()
-                    self._focus_sweep_set = False
-            else:
-                print("Current pos:", self.serial.get_motor_position('B'))
-                print("Current FM:", self.eval_focus(self.streamer.read())[0])
-                # Start moving focus motor from curr pos to min
-                self.serial.move(None, "min")
+                # Clear the focus event
+                self._event_focus.clear()
+                self._focus_sweep_set = False
+        elif True:
+            print("Current pos:", self.serial.get_motor_position('B'))
+            print("Current FM:", self.eval_focus(self.streamer.read())[0])
+            # Start moving focus motor from curr pos to min
+            self.serial.move(None, "min")
+        else:
+            # Wait for the sweep min_pos
+            rospy.sleep(self.sleep_time)
     
     def _wait_adjust(self):
         if not (self._event_moved.is_set() or self._event_focus.is_set()):
@@ -139,9 +154,10 @@ class Focuser():
                 self._event_stop.set()
 
     def start(self):
-        # Set moved/clear focus 
-        self._event_moved.set()
-        self._event_focus.clear()
+        # Prepare focus events
+        self._event_wait.set()
+        self._event_eval.clear()
+        self._event_move.clear()
 
         # Clear best values
         self.fm_best = None
