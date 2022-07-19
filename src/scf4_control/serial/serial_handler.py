@@ -76,44 +76,32 @@ class SerialHandler(SerialBase):
             100 * (-1 if status[5] == "1" else 1),
         ][:self.N_MOTORS]
 
-        print("Moving to middle")
         # Move moors towards switch
         self.set_coordinate_mode(1)
         self.set_motor_move_mode(1)
         self.move(*steps)
-        start_time = rospy.get_time()
         self.await_idle(*motors, initial_status=status)
-        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
-        print("Moving slightly back")
         # Go a bit back from switch
         self.set_motor_move_mode(0)
         self.move(*[-200]*self.N_MOTORS)
-        start_time = rospy.get_time()
         self.await_idle()
-        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
-        print("Moving till switch triggers")
         # Move till switch reached
         self.set_motor_move_mode(1)
         status = self.get_status()
         self.move(*[100]*self.N_MOTORS)
-        start_time = rospy.get_time()
         self.await_idle(*motors, initial_status=status)
-        print("Arrived, elapsed:", rospy.get_time() - start_time)
 
         # Set the current coordinate where the switch is as middle
         self.set_counter(*self.retrieve_motors_prop("switch_pos"))
         self.set_motor_move_mode(0)
         self.set_coordinate_mode(0)
 
-        print("Mid coord set, moving back")
         # Move zoom all the way back to see all
         self.move(self.config["A"]["count_max"])
-        start_time = rospy.get_time()
         self.await_idle()
         self.set_coordinate_mode(1)
-        print("Arrived, elapsed:", rospy.get_time() - start_time)
     
     def retrieve_motors_prop(self, prop):
         """Retrieves a config property for every motor
@@ -173,6 +161,14 @@ class SerialHandler(SerialBase):
             is_equal = is_equal and (status[status_idx] == val)
         
         return is_equal
+
+    # def is_at(self, *args, **kwargs):
+    #     motor_types = self._to_motor_types(args, kwargs, convert="count")
+    #     args = list(motor_types.keys())
+    #     vals = list(motor_types.values())
+    #     return self.is_equal(*args, status_group=0)
+        
+
 
     def is_moving(self, *args):
         """Checks if any of the motors are moving towards some position

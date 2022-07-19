@@ -13,6 +13,64 @@ class SerialBase():
         self.coordinate_mode = 1
         self.motor_move_mode = 0
         self.read_lock = threading.Lock()
+
+    def _to_motor_types(self, args, as_list=False, convert=None):
+        """Converts arguments for motors to a valid dictionary/list
+
+        Takes arguments and keyword arguments and converts them to
+        dictionary with keys corresponding to motor names and values
+        corresponding to motor values. If values are motor names, this
+        method can also return just a list of motor names.
+
+        Examples:
+        >>> _to_motor_types(['B'], as_list=True)
+        ['B']
+
+        >>> _to_motor_types([2, None, 4])
+        {'A': 2, 'C': 4}
+
+        >>> _to_motor_types({a: None, b: None, c: True}, as_list=True)
+        ['C']
+
+        >>> _to_motor_types({a: 100, b: "min"}, convert="steps")
+        {'A': 100, 'B': 0}
+
+        Args:
+            args (list|dict): If it is a list - the values for each
+                motor in a sequence `A`, `B`, `C`. If any value `None`,
+                the motor is skipped. If it is a dict - the pairs of
+                motor names and corresponding values. If `as_list` is
+                `True`, the values are converted to  `bool` to check if
+                the corresponding motor type should be included in a
+                motor name list 
+            as_list (bool, optional): Whether to return the parsed
+                arguments as a list of motor names. Defaults to False.
+            convert (str, optional): Whether to convert the values to
+                numeric ones in case the value is like "min" or "max".
+                Defaults to None.
+
+        Returns:
+            list|dict: A list of motor names or a dictionary of motor
+                names and their corresponding values
+        """
+        if len(args) < 0:
+            # If no arguments are provided, assume all motors in dict
+            args = {motor_type: motor_type for motor_type in "ABC"}
+        elif isinstance(args, list):
+            # If motor information is provided as list, skip the `None`s
+            args = {k:v for k, v in zip("ABC", args) if v is not None}
+        elif isinstance(args, dict):
+            # If motor information is provided as dict, capitalize motor name
+            args = {k.upper():v for k, v in args.items() if k in "ABCabc"}
+            args = {k:k for k, v in args.items() if v} if as_list else args
+        
+        if convert is not None:
+            # Convert motor values like "min" to numeric
+            args = {k: self.config[k][f"{convert}_{v}"] 
+                   if v in ["min", "max", "def"] else v
+                   for k, v in args.items()}
+        
+        return list(args.values()) if as_list else args
     
     def _verify_steps(self, steps, motor_type):
         """Verifies the motor steps
