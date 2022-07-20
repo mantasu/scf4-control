@@ -200,6 +200,8 @@ class Focuser():
             # Set stop, clear move
             self._event_stop.set()
             self._event_move.clear()
+
+            rospy.loginfo("Focus finished.")
         else:
             # Move focus motor to where the largest FM is
             self.serial.move(None, self._best_focus_pose)
