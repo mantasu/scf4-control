@@ -1,9 +1,9 @@
 import cv2
 import rospy
-import threading
 import numpy as np
+import multiprocessing
 
-class Focuser():
+class Focuser(multiprocessing.Process):
     def __init__(self, streamer, serial, sleep_time=0.1):
         super().__init__()
 
@@ -13,18 +13,17 @@ class Focuser():
 
         # Set sleep time & init lock
         self.sleep_time = sleep_time
-        self.write_lock = threading.Lock()
+        self.write_lock = multiprocessing.Lock()
 
-        # Init thread, roi
-        self.thread = None
         self.roi = None
 
         # Init the events to monitor updates
-        self._event_stop = threading.Event()
-        self._event_wait = threading.Event()
-        self._event_prep = threading.Event()
-        self._event_eval = threading.Event()
-        self._event_move = threading.Event()
+        self._event_stop = multiprocessing.Event()
+        self._event_init = multiprocessing.Event()
+        self._event_wait = multiprocessing.Event()
+        self._event_prep = multiprocessing.Event()
+        self._event_eval = multiprocessing.Event()
+        self._event_move = multiprocessing.Event()
 
         # Init start times, best pos
         self._wait_start_time = None
@@ -41,38 +40,38 @@ class Focuser():
         Note: only one event can be set at a time (thus else-if
             statements), otherwise there's no point in having locks.
         """
-        with self.write_lock:
-            if self._event_wait.is_set():
-                # Clear start time and event
-                self._wait_start_time = None
-                self._event_wait.clear()
-            elif self._event_prep.is_set():
-                # Reset the coordinate mode, speed
-                self.serial.set_coordinate_mode(1)
-                self.serial.set_speed(None, "def")
+        
+        if self._event_wait.is_set():
+            # Clear start time and event
+            self._wait_start_time = None
+            self._event_wait.clear()
+        elif self._event_prep.is_set():
+            # Reset the coordinate mode, speed
+            self.serial.set_coordinate_mode(1)
+            self.serial.set_speed(None, "def")
 
-                # Clear the single event
-                self._event_prep.clear()
-            elif self._event_eval.is_set():
-                # Reset the coordinate mode, speed
-                self.serial.set_coordinate_mode(1)
-                self.serial.set_speed(None, "def")
+            # Clear the single event
+            self._event_prep.clear()
+        elif self._event_eval.is_set():
+            # Reset the coordinate mode, speed
+            self.serial.set_coordinate_mode(1)
+            self.serial.set_speed(None, "def")
 
-                # Re-init arrays
-                self.fms.clear()
-                self.pos.clear()
+            # Re-init arrays
+            self.fms.clear()
+            self.pos.clear()
 
-                # Clear start time and event
-                self._eval_start_time = None
-                self._event_eval.clear()
-            elif self._event_move.is_set():
-                # Reset the coordinate mode, speed
-                self.serial.set_coordinate_mode(1)
-                self.serial.set_speed(None, "def")
+            # Clear start time and event
+            self._eval_start_time = None
+            self._event_eval.clear()
+        elif self._event_move.is_set():
+            # Reset the coordinate mode, speed
+            self.serial.set_coordinate_mode(1)
+            self.serial.set_speed(None, "def")
 
-                # Clear focus pose and event
-                self._best_focus_pose = None
-                self._event_move.clear()
+            # Clear focus pose and event
+            self._best_focus_pose = None
+            self._event_move.clear()
 
     def _time_met(self, event_type="wait"):
         if event_type == "wait":
@@ -113,6 +112,14 @@ class Focuser():
             fm, _ = self.eval_focus(frame)
             self.fms.append(fm)
     
+    def _execute_init(self):
+        if not self._event_init.is_set():
+            return
+        
+        self._clear_events()
+        self._event_wait.set()
+        self._event_init.clear()
+    
     def _execute_wait(self):
         """Executes waiting event
 
@@ -132,7 +139,7 @@ class Focuser():
             self._event_prep.set()
             self._event_wait.clear()
             self._wait_start_time = None
-            rospy.loginfo("Zoom motor stopped. Focus motor started.")
+            rospy.loginfo(f"Zoom motor stopped. Focus motor started.")
         else:
             # If still moving, just wait
             rospy.sleep(self.sleep_time)  
@@ -205,24 +212,6 @@ class Focuser():
         else:
             # Move focus motor to where the largest FM is
             self.serial.move(None, self._best_focus_pose)
-
-    def start(self):
-        # Prepare focus events
-        self._clear_events()
-        self._event_wait.set()
-
-        if self.thread is None or not self.thread.is_alive():
-            # If thread is None or isn't running, start running
-            self.thread = threading.Thread(target=self.update)
-            self.thread.start()
-    
-    def stop(self):
-        # Set the stop event
-        self._event_stop.set()
-
-        if self.thread is not None and self.thread.is_alive():
-            # Wait to complete
-            self.thread.join()
     
     def eval_focus(self, img):
         if self.roi is not None:
@@ -235,11 +224,23 @@ class Focuser():
         
         # Get the grayscale ROI & calculate focal measure
         roi_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        fm = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
+        fm = cv2.Laplacian(roi_gray, cv2.CV_32F).var()
 
         return fm, roi
+
+    def reset(self):
+        # Enable an init event
+        self._event_init.set()
     
-    def update(self):
+    def stop(self):
+        # Set the stop event
+        self._event_stop.set()
+
+        if self.is_alive():
+            # Wait to complete
+            self.join()
+    
+    def run(self):
         """_summary_
 
         Note: event execute methods are surrounded with locks so that 
@@ -255,9 +256,9 @@ class Focuser():
                 self._event_stop.clear()
                 break
             
-            with self.write_lock:
-                # Make focus updates
-                self._execute_wait()
-                self._execute_prep()
-                self._execute_eval()
-                self._execute_move()
+            # Make focus updates
+            self._execute_init()
+            self._execute_wait()
+            self._execute_prep()
+            self._execute_eval()
+            self._execute_move()

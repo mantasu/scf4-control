@@ -5,12 +5,11 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
 from scf4_control.msg import Scf4Control, CamControl
 
-from cv_bridge import CvBridgeError
+from cv_bridge import CvBridge, CvBridgeError
 
 from scf4_control.utils import parse_json
 from scf4_control.serial import SerialHandler
-from scf4_control.tracker import Focuser
-from scf4_control.tools import Streamer
+from scf4_control.tools import Streamer, Focuser
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
@@ -23,6 +22,9 @@ class C1ProX18:
         self.streamer = Streamer(config["capturer"], config["recorder"])
         self.serial = SerialHandler(config["serial"], config["motors"])
         self.focuser = Focuser(self.streamer, self.serial)
+
+        # Open CV bridge for rosmsg
+        self.cv_bridge = CvBridge()
 
         manual_thread = threading.Thread(target=self.manual)
         # manual_thread.start()
@@ -51,6 +53,14 @@ class C1ProX18:
             else:
                 r = self.serial.send_command(x)
                 print(r)
+    
+    def _reset_focuser(self):
+        if self.focuser.is_running():
+            self.focuser.reset()
+        else:
+            self.focuser = Focuser(self.streamer, self.serial)
+            self.focuser.reset()
+            self.focuser.start()
     
     def _vel_callback_helper(self, twist, motor_type):
         """A helper function to generate motor velocity values
@@ -183,10 +193,14 @@ class C1ProX18:
         # Read from capture device
         self.streamer.update_once()
 
-        # Get a camera frame converted to a compressed image message
-        _, frame_compressed_msg = self.streamer.read(return_msg=True)
+        # Get a camera frame (image)
+        frame = self.streamer.read()
         
         try:
+            # Compute a compressed frame message for the the ROS topics
+            frame_compressed_msg = self.cv_bridge.cv2_to_compressed_imgmsg(
+                frame, dst_format=self.streamer.capturer.dst_format)
+
             # Try publishing the compressed image frame msg
             self.cam_publisher.publish(frame_compressed_msg)
         except CvBridgeError as e:

@@ -1,12 +1,12 @@
 import rospy
+import ctypes
+import numpy as np
+import multiprocessing
 
-from cv_bridge import CvBridge
-from threading import Thread, Lock
 from scf4_control.tools.capturer import Capturer
 from scf4_control.tools.recorder import Recorder
 
-
-class Streamer():
+class Streamer(multiprocessing.Process):
     """_summary_
 
     https://gist.github.com/allskyee/7749b9318e914ca45eb0a1000a81bf56
@@ -17,13 +17,17 @@ class Streamer():
         recorder_config = self._verify_recorder_config(recorder_config)
         self.recorder = Recorder(recorder_config)
 
-        # Open CV bridge for rosmsg
-        self.cv_bridge = CvBridge()
+        self.recording_duration = multiprocessing.Value('i', 0)
 
-        # Read and set the first captured camera frame
-        self.grabbed, self.frame = self.capturer.read()
-        self.started = False
-        self.read_lock = Lock()
+        self.frame_shape = (self.capturer.height, self.capturer.width, 3)
+        self.frame_size = int(np.prod(self.frame_shape))
+
+        self.frame = multiprocessing.Array(ctypes.c_float, self.frame_size)
+        self.frame = np.frombuffer(self.frame.get_obj(), dtype=np.float32)
+        self.frame = self.frame.reshape(self.frame_shape)
+
+        self._event_recording_start = multiprocessing.Event()
+        self._event_recording_stop = multiprocessing.Event()
     
     def _verify_recorder_config(self, config):
         # Get FPS and resolution for capturer and recorder
@@ -50,84 +54,72 @@ class Streamer():
             config["height"] = cap_height
         
         return config
+    
+    def _handle_recording(self, frame):
+        """Handles recording events and writes frames to a file
 
-    def start(self) :
-        if self.started :
-            # If thread already started, log a warning message
-            rospy.logwarn("Streaming thread already started")
-            return None
+        Checks if start/stop recording events are set and starts/stops
+        recording captured frames to a video file; clears events. It
+        only asks the recorder to save the provided frame if the
+        recorder is on.
+
+        Args:
+            frame (np.ndarray): The image to record as a video frame
+        """
+        if self._event_recording_start.is_set():
+            # Start recording for the specified duration (or none)
+            self.recorder.start_recording(self.recording_duration)
+            self._event_recording_start.clear()
+
+        if self._event_recording_stop.is_set():
+            # End recording & clear event
+            self.recorder.end_recording()
+            self._event_recording_stop.clear()
         
-        # Begin the thread
-        self.started = True
-        self.thread = Thread(target=self.update)
-        self.thread.start()
-
-        return self
+        if self.recorder.is_recording:
+            # Tell recorder to write a frame
+            self.recorder.write_video(frame)
     
     def update_once(self):
         # Read the current frame from capturer
         grabbed, frame = self.capturer.read()
-
-        if self.started:
-            # Safely acquire a frame
-            self.read_lock.acquire()
-            self.grabbed, self.frame = grabbed, frame
-            self.read_lock.release()
-        else:
-            # Just a normal update if not threaded run
-            self.grabbed, self.frame = grabbed, frame
         
-        if not grabbed:
+        if not grabbed or frame is None:
             # If no response received, log a warning message
-            rospy.logwarn("Could not capture camera frame.") 
-        elif self.recorder.is_recording:
-            # Use the recorder to write the frame
-            self.recorder.write_video(self.frame)
-        else:
-            # Release the recorder
-            self.recorder.release()
+            rospy.logwarn("Could not capture camera frame.")
+            return
+        
+        # Record, update shared frame
+        self._handle_recording(frame)
+        np.copyto(self.frame, frame)
 
-    def update(self):
-        while self.started:
+    def run(self):
+        while True:
+            if self._event_stop.is_set():
+                # Stop event set - break
+                self._event_stop.clear()
+                break
+            
             # Update each time
             self.update_once()
 
-    def read(self, return_msg=False):
-        if self.started:
-            # Safely acquire a frame
-            self.read_lock.acquire()
-            frame = self.frame.copy()
-            self.read_lock.release()
-        else:
-            # If thread is not running
-            frame = self.frame.copy()
-
-        if return_msg:
-            # Also compute a compressed frame message for the ROS nodes
-            frame_compressed_msg = self.cv_bridge.cv2_to_compressed_imgmsg(
-                frame, dst_format=self.capturer.dst_format)
-            
-            return frame, frame_compressed_msg
-
-        return frame
+    def read(self):
+        return self.frame.copy()
     
-    def start_recording(self, duration=None):
+    def start_recording(self, duration=0):
         # Start to record (optionally for dur)
-        self.recorder.start_recording(duration)
+        self.recording_duration = duration
+        self._event_recording_start.set()
     
     def end_recording(self):
         # End the recording forcefully
-        self.recorder.end_recording()
-    
-    def sleep(self):
-        sleep_time = 1 / self.capturer.fps
-        rospy.sleep(sleep_time)
+        self._event_recording_stop.set()
 
     def stop(self) :
-        if self.started:
-            # Wait to terminate
-            self.started = False
-            self.thread.join()
+        if self.is_running():
+            # Wait till terminates
+            self._event_stop.set()
+            self.join()
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Release the resources

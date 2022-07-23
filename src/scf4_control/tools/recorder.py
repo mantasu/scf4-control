@@ -43,10 +43,11 @@ class Recorder():
     
     def end_recording(self):
         if self.is_recording:
-            # Delete initialized params
-            self.is_recording = False
-            self.writer_duration = None
+            # Release writer
+            self.release()
             self.start_time = None
+            self.writer_duration = 0
+            self.is_recording = False
 
             # Log that the recording has ended
             rospy.loginfo("Recording finished.")

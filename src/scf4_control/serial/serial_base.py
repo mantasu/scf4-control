@@ -1,6 +1,7 @@
 import rospy
 import serial
 import threading
+import multiprocessing
 
 from scf4_control.utils import clamp
 
@@ -12,7 +13,7 @@ class SerialBase():
         self.serial = None
         self.coordinate_mode = 1
         self.motor_move_mode = 0
-        self.read_lock = threading.Lock()
+        self.read_lock = multiprocessing.Lock()
 
     def _to_motor_types(self, args, as_list=False, convert=None):
         """Converts arguments for motors to a valid dictionary/list
