@@ -108,7 +108,7 @@ class C1ProX18:
 
         if vel_curr != 0:
             # Check the direction and make motor steps either + or -
-            steps = motor["jog_steps"] * (1 if vel_curr > 0 else -1)
+            steps = motor["steps_def"] * (1 if vel_curr > 0 else -1)
 
             if not abs(vel_curr) == abs(vel_last):
                 # If current speed is different from the last
