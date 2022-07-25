@@ -9,7 +9,8 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from scf4_control.utils import parse_json
 from scf4_control.serial import SerialHandler
-from scf4_control.tools import Streamer, Focuser
+from scf4_control.stream import Streamer
+from scf4_control.focus import Focuser
 
 class C1ProX18:
     def __init__(self, config_path="config.json", is_relative=True):
@@ -55,7 +56,7 @@ class C1ProX18:
                 print(r)
     
     def _reset_focuser(self):
-        if self.focuser.is_running():
+        if self.focuser.is_alive():
             self.focuser.reset()
         else:
             self.focuser = Focuser(self.streamer, self.serial)
@@ -150,7 +151,7 @@ class C1ProX18:
 
         if steps_a is not None:
             # Start focus thread
-            self.focuser.start()
+            self._reset_focuser()
     
     def scf4_callback(self, scf4):
         if scf4.stop:

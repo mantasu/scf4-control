@@ -98,8 +98,8 @@ class SerialHandler(SerialBase):
         self.set_motor_move_mode(0)
         self.set_coordinate_mode(0)
 
-        # Move zoom all the way back to see all
-        self.move(self.config["A"]["count_max"])
+        # Move zoom all the way back to see a wide view and adjust focus
+        self.move(self.config['A']["count_def"], self.config['B']["count_def"])
         self.await_idle()
         self.set_coordinate_mode(1)
     
@@ -162,13 +162,30 @@ class SerialHandler(SerialBase):
         
         return is_equal
 
-    # def is_at(self, *args, **kwargs):
-    #     motor_types = self._to_motor_types(args, kwargs, convert="count")
-    #     args = list(motor_types.keys())
-    #     vals = list(motor_types.values())
-    #     return self.is_equal(*args, status_group=0)
-        
+    def is_at(self, *args, **kwargs):
+        """Checks if the specified motor(-s) is at specified position
 
+        Gets the status for the motors and checks the first 3 values -
+        one for every motor. Each value represents motor's position.
+        `False` is returned only if either of the specified motor(-s)
+        or, if not specified, either of all the motors, does not match
+        the specified position.
+
+        Args:
+            *args: The motor positions to check. If either of the value
+                is None, that motor is skipped
+            **kwargs: The motor name-value pairs. This is an alternative
+                to args, in case the motor value is specified by its
+                keyword name, e.g., b=0 
+
+        Returns:
+            bool: Whether the specified motor(-s) is at given position
+        """
+        # Convert the provided args and kwargs to motor name-value pairs
+        motor_types = self._to_motor_types(args, kwargs, convert="count")
+        args, vals = motor_types.keys(), list(motor_types.values())
+
+        return self.is_equal(*args, status_group=0, vals=vals)
 
     def is_moving(self, *args):
         """Checks if any of the motors are moving towards some position
@@ -176,7 +193,8 @@ class SerialHandler(SerialBase):
         Gets the status for the motors and checks the last 3 values -
         one for every motor. `0` indicates not moving and `1` indicates
         a motor is moving. `False` is returned only if the specified
-        motor(-s) or, if not specified, none of the motors, are moving.
+        motor(-s) or, if not specified, all of the motors, are not
+        moving.
 
         Args:
             *args: The type of motors to check if they're moving. For
@@ -195,7 +213,7 @@ class SerialHandler(SerialBase):
         one for every motor. `0` indicates not switched and `1`
         indicates a switch for that motor is triggered. `False` is
         returned only if the specified motor(-s) or, if not specified,
-        none of the motors, triggered switch.
+        all of the motors, did not trigger switch.
 
         Args:
             *args: The type of motors to check if their switch status is

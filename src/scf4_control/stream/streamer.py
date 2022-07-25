@@ -3,8 +3,8 @@ import ctypes
 import numpy as np
 import multiprocessing
 
-from scf4_control.tools.capturer import Capturer
-from scf4_control.tools.recorder import Recorder
+from scf4_control.stream.capturer import Capturer
+from scf4_control.stream.recorder import Recorder
 
 class Streamer(multiprocessing.Process):
     """_summary_
