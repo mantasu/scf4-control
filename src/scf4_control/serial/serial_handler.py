@@ -150,6 +150,9 @@ class SerialHandler(SerialBase):
         if not isinstance(vals, list):
             # If single value
             vals = [vals] * 3
+        else:
+            # Ensure each value's stringified
+            vals = [str(val) for val in vals]
 
         if len(args) == 0:
             # Check all motors

@@ -205,7 +205,7 @@ class SerialBase():
                 connected to. Defaults to None.
             baudrate (int, optional): The rate at which information is
                 transferred. Defaults to None.
-            timeout (int, optional): The time (ms) to wait before
+            timeout (int, optional): The time (in sec) to wait before
                 terminating the waiting process for the response after
                 sending a command through serial. Defaults to None.
         """

@@ -29,7 +29,7 @@
         "timeout": 5
     },
     "motors": {
-        "min_idle_time": 3,
+        "min_idle_time": 1.5,
         "A": {
             "steps_def": 50,
             "steps_min": 1,
@@ -49,7 +49,7 @@
             "steps_max": 65535,
             "speed_def": 600,
             "speed_min": 450,
-            "speed_max": 14000,
+            "speed_max": 10000,
             "count_def": 5300,
             "count_min": 0,
             "count_max": 10000,

@@ -14,7 +14,7 @@ class Focuser(multiprocessing.Process):
         # Sweeper to adjust focus based on captured frames
         self.sweeper = Sweeper(streamer, serial, sleep_time)
 
-        # Init the events to monitor updates
+        # Init the events to monitor event updates
         self._event_stop = multiprocessing.Event()
         self._event_init = multiprocessing.Event()
         self._event_wait = multiprocessing.Event()
@@ -69,7 +69,14 @@ class Focuser(multiprocessing.Process):
             rospy.sleep(self.sleep_time)
     
     def _execute_focus(self):
-        self.sweeper.execute(self._event_stop)
+        if not self._event_focus.is_set():
+            return
+        elif self.sweeper.is_set():
+            # Execute sweeper adjust, sweep events
+            self.sweeper.execute(self._event_stop)
+        else:
+            # Set a sweeper on
+            self.sweeper.set()
 
     def reset(self):
         # Enable an init event
@@ -84,15 +91,6 @@ class Focuser(multiprocessing.Process):
             self.join()
     
     def run(self):
-        """_summary_
-
-        Note: event execute methods are surrounded with locks so that 
-            an event switch would not happen after it is reset from
-            another thread. Efficiency could be gained by surrounding
-            with locks only those if/else blocks which include the
-            change of the event, however it does not increase the speed
-            notably and the current design is chosen for readability.
-        """
         while True:
             if self._event_stop.is_set():
                 # Clear remaining events

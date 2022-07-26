@@ -5,27 +5,31 @@ import multiprocessing
 
 class Sweeper:
     
-    SWEEP_SPEED_FAST = 4000
+    SWEEP_SPEED_FAST = 2000
+    FM_PEAK_MARGIN = 400
 
     def __init__(self, streamer, serial, sleep_time=0.1):
-        
+        # Init passed params
         self.serial = serial
         self.streamer = streamer
         self.sleep_time = sleep_time
 
+        # Init helper arguments
         self.adjust_pos = "max"
         self.target_pos = "min"
         self.sweep_start_time = None
         self.sweep_speed = self.SWEEP_SPEED_FAST
-
+        
+        # TODO: roi msg
         self.roi = None
 
         # Init arrays
         self.fms = []
         self.pos = []
 
-        self._event_adjust = multiprocessing.Event()
+        # Events to monitor adjust and sweep events
         self._event_sweep = multiprocessing.Event()
+        self._event_adjust = multiprocessing.Event()
     
     def _update_pos(self):
         # Get focus motor position & add to list
@@ -100,7 +104,8 @@ class Sweeper:
             pos_idx = np.argmax(self.fms)
             self.adjust_pos = self.pos[pos_idx]
 
-            self._eval_start_time = None
+            # Reset the sweep start time
+            self.sweep_start_time = None
 
             # Reset the list
             self.fms.clear()
@@ -112,8 +117,8 @@ class Sweeper:
             else:
                 # Set up a precise sweep
                 self.sweep_speed = "max"
-                self.target_pos = self.adjust_pos + 1000
-                self.adjust_pos = self.adjust_pos - 1000
+                self.target_pos = self.adjust_pos + self.FM_PEAK_MARGIN
+                self.adjust_pos = self.adjust_pos - self.FM_PEAK_MARGIN
             
             # Set adjust, clear eval
             self._event_adjust.set()
@@ -134,6 +139,13 @@ class Sweeper:
 
         return fm, roi
     
+    def set(self):
+        # Set an adjusting event
+        self._event_adjust.set()
+    
+    def is_set(self):
+        return self._event_adjust.is_set() or self._event_sweep.is_set()
+    
     def clear_events(self):
         # Reset the coordinate mode, speed
         self.serial.set_coordinate_mode(1)
@@ -152,6 +164,7 @@ class Sweeper:
             self.sweep_start_time = None
     
     def execute(self, stop_event):
+        # Execute adjusting and sweeping
         self._execute_adjust(stop_event)
         self._execute_sweep()
 
