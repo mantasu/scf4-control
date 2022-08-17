@@ -2,7 +2,7 @@
     "topics": {
         "motors_sub": "/scf4",
         "camera_sub": "/cam_in",
-        "camera_pub": "/cam_out"
+        "camera_pub": "/camera/image_raw"
     },
     "capturer": {
         "device_id": 0,

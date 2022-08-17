@@ -15,7 +15,7 @@ class CameraViewer:
         self.bridge = CvBridge()
 
         self.cam_subscriber = rospy.Subscriber(
-            "/cam_out", CompressedImage, self.cam_callback, queue_size=1)
+            "/camera/image_raw", CompressedImage, self.cam_callback, queue_size=1)
     
     def cam_callback(self, data):
         try:
