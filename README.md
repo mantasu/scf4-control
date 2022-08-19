@@ -10,9 +10,9 @@ This package provides publisher-subscriber scripts for [**SCF4-M**](https://wiki
 Structure is customizable but, by default, there are several topics to pay attention to:
 
 * `/scf4` - the topic to which the **c1prox18** node subscribes. It receives [Scf4Control](msg/Scf4Control.msg) messages and tells the **SCF4** controller to move motors accordingly.
-* `/cmd_vel` - the topic to which the **c1prox18** node subscribes. As later explained, the motors can also be controlled via keyboard via [Twist](http://docs.ros.org/en/api/geometry_msgs/html/msg/Twist.html) messages.
+* `/cmd_vel` - the topic to which the **c1prox18** node subscribes. As later explained, the motors can also be controlled via keyboard with [Twist](http://docs.ros.org/en/api/geometry_msgs/html/msg/Twist.html) messages.
 * `/cam_in` - the topic to which **c1prox18** node subscribes. It receives [CamControl](msg/CamControl.msg) messages and tells the streamer API to what to do with the received frames (e.g., to record them)
-* `/camera/image_raw` - the topic to **c1prox18** node publishes. It publishes [CompressedImage](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/CompressedImage.html) messages at a fixed rate (30 FPS).
+* `/camera/image_raw` - the topic to which **c1prox18** node publishes. It publishes [CompressedImage](http://docs.ros.org/en/noetic/api/sensor_msgs/html/msg/CompressedImage.html) messages at a fixed rate (30 FPS).
 
 
 ## Prerequisites
