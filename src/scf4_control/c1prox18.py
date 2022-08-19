@@ -1,5 +1,4 @@
 import rospy
-import threading
 
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import CompressedImage
@@ -27,9 +26,6 @@ class C1ProX18:
         # Open CV bridge for rosmsg
         self.cv_bridge = CvBridge()
 
-        manual_thread = threading.Thread(target=self.manual)
-        # manual_thread.start()
-
         # Subscriber for velocity changes for motor control
         self.vel_subscriber = rospy.Subscriber(
             "/cmd_vel", Twist, self.vel_callback, queue_size=10)
@@ -44,16 +40,6 @@ class C1ProX18:
         # For image data check http://wiki.ros.org/Sensors/Cameras
         self.cam_publisher = rospy.Publisher(config["topics"]["camera_pub"],
             CompressedImage, queue_size=1)
-    
-    def manual(self):
-        while True:
-            x = input("Enter G-code or enter 'q' to exit manual thread\n")
-            if x == 'q':
-                print("Exiting manual thread")
-                break
-            else:
-                r = self.serial.send_command(x)
-                print(r)
     
     def _reset_focuser(self):
         if self.focuser.is_alive():
