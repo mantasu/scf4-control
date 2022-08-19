@@ -32,7 +32,7 @@ $ python -m venv venv
 $ source venv/bin/activate
 ```
 
-Of course, if it is a customer product, just install the dependencies globally, `venv` is suggested to ensure everything runs smoothly and to test versions are compatibility.
+Of course, if it is a product, just install the dependencies globally, `venv` is suggested to ensure everything runs smoothly and to test versions are compatibile.
 
 ### Apt Packages
 
